@@ -1,0 +1,5 @@
+# Copy to application.yml and adjust for local use.
+# The Makefile `make config` can sync example env files; YAML is optional.
+app:
+  name: veridoc
+  environment: development

@@ -1,0 +1,10 @@
+.git
+.gitignore
+.pytest_cache
+.ruff_cache
+.pdm-python
+.pdm-build
+__pycache__
+*.pyc
+.venv
+.env
