@@ -41,25 +41,25 @@ sync:
 install: sync
 
 test:
-	$(PDM) run pytest
+	$(PDM) run python -m pytest
 
 test-unit:
-	$(PDM) run pytest -m unit
+	$(PDM) run python -m pytest -m unit
 
 test-integration:
-	$(PDM) run pytest -m integration
+	$(PDM) run python -m pytest -m integration
 
 test-e2e:
-	$(PDM) run pytest -m e2e
+	$(PDM) run python -m pytest -m e2e
 
 test-api:
-	$(PDM) run pytest -m api
+	$(PDM) run python -m pytest -m api
 
 lint:
-	$(PDM) run ruff check src tests app worker
+	$(PDM) run python -m ruff check src tests app worker
 
 format:
-	$(PDM) run ruff format src tests app worker
+	$(PDM) run python -m ruff format src tests app worker
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .pdm-build dist build
