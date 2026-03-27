@@ -81,37 +81,53 @@ Runtime dependencies live under `[project]` in `pyproject.toml`. Development too
 
 ## Docker Compose
 
-The stack is defined in `docker-compose.yml`.
+The stack is defined in `docker-compose.yml`. **`make docker-up`** brings up every service below (except **`test`**, which is behind the `test` profile).
 
-- **`app`** — builds the image, mounts `./config` at `/app/config` read-only, sets `VERIDOC_CONFIG_DIR=/app/config`, and runs `pdm run python -m veridoc`.
-- **`test`** — same image and mounts; runs `pdm run pytest`. It uses Compose **profile** `test`, so it is not started by a plain `docker compose up` unless you enable that profile.
+| Service | Role | Default host port |
+|--------|------|-------------------|
+| **postgres** | Canonical relational data (PostgreSQL 16) | `5432` |
+| **redis** | Pub/sub, caching, worker coordination (Redis 7, AOF on) | `6379` |
+| **minio** | S3-compatible object storage (API + web console) | `9000` (API), `9001` (console) |
+| **opensearch** | Search and analytics (single-node; `DISABLE_SECURITY_PLUGIN=true` for local dev only) | `9200` |
+| **opensearch-dashboards** | OpenSearch Dashboards UI | `5601` |
+| **app** | veridoc application (`pdm run python -m veridoc`) | (none; attach logs via Compose) |
+| **test** | Runs `pytest` in a one-off container (`profile: test`) | — |
+
+The **app** service waits for **postgres**, **redis**, **minio**, and **opensearch** to pass their health checks before starting. Connection defaults are wired through environment variables (see **`.env.example`**); inside the Compose network the app receives URLs such as `postgresql://…@postgres:5432/…`, `redis://redis:6379/0`, `http://minio:9000`, and `http://opensearch:9200`.
+
+**OpenSearch:** the cluster runs with the security plugin disabled via `DISABLE_SECURITY_PLUGIN=true` in Compose—suitable only for trusted local machines; do not expose these ports on a network. On **Linux**, if the node fails to start, raise `vm.max_map_count` (for example `sudo sysctl -w vm.max_map_count=262144`). See the [OpenSearch Docker install notes](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/docker/).
+
+**MinIO:** open `http://localhost:9001` and sign in with `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` from `.env` (defaults match the example file). Create a bucket named like `S3_BUCKET` (`veridoc` by default) when you begin storing objects.
 
 Examples:
 
 ```bash
-# Build images
+# Build the application image (infrastructure images are pulled as needed)
 make docker-build
 
-# Run the app in the foreground (rebuilds if needed)
+# Run the full stack in the foreground (rebuilds the app image if needed)
 make docker-up
 
-# Run tests in a throwaway container (uses profile `test`)
+# Infrastructure only (no app container)
+docker compose up -d postgres redis minio opensearch opensearch-dashboards
+
+# Run tests in a throwaway container (profile `test`)
 make docker-test
 
-# One-off app run (exits after the command)
+# One-off app run (starts dependencies if needed, then exits)
 make docker-run
 
-# Equivalent manual invocations
-docker compose up --build app
+# Manual equivalents
+docker compose up --build
 docker compose --profile test run --rm test
 docker compose run --rm app
 ```
 
-`.env` is optional at runtime: both services declare `env_file` with `required: false`, so Compose works before you run `make config`. Values in `docker-compose.yml` (for example `VERIDOC_CONFIG_DIR` for containers) still apply.
+`.env` is optional: **`app`** and **`test`** use `env_file` with `required: false`. Compose still applies defaults from `docker-compose.yml` when variables are unset. Run **`make config`** to create `.env` from **`.env.example`** so host port overrides and credentials stay consistent.
 
 ## Configuration and environment
 
-- **`.env.example`** — template for local and Compose-related variables. **`make config`** copies it to **`.env`** when `.env` is missing.
+- **`.env.example`** — template for local and Compose-related variables (Postgres, Redis, MinIO/S3, OpenSearch ports, `DATABASE_URL`, `REDIS_URL`, etc.). **`make config`** copies it to **`.env`** when `.env` is missing.
 - **`VERIDOC_CONFIG_DIR`** — directory the CLI treats as the config root (default `config` if unset). Under Compose it is set to `/app/config` inside the container.
 - **`config/`** — mount point for configuration files. **`config/application.example.yml`** is a sample; copy or adapt it for your own `application.yml` (or other files) as the product grows.
 

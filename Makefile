@@ -19,7 +19,7 @@ help:
 	@echo "  make config      Ensure .env from .env.example (idempotent)"
 	@echo "  make resources   Placeholder for assets / downloads (extend as needed)"
 	@echo "  make docker-build   Build compose images"
-	@echo "  make docker-up      Run app stack (foreground)"
+	@echo "  make docker-up      Run full stack: Postgres, Redis, MinIO, OpenSearch, Dashboards, app"
 	@echo "  make docker-down    Stop app stack"
 	@echo "  make docker-test    Run tests in Docker (compose profile: test)"
 	@echo "  make docker-run     One-off app container run"
@@ -59,7 +59,7 @@ docker-build:
 	$(DOCKER_COMPOSE) build
 
 docker-up: config
-	$(DOCKER_COMPOSE) up --build app
+	$(DOCKER_COMPOSE) up --build
 
 docker-down:
 	$(DOCKER_COMPOSE) down
