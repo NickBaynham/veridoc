@@ -1,13 +1,14 @@
 {
   "info": {
     "name": "VerifiedSignal API (local)",
-    "description": "FastAPI surface for local dev (`pdm run api` on port 8000 by default).\n\n**Document intake:** `POST /api/v1/documents` is **multipart/form-data**. After import, open **Upload document**, choose **Body → form-data**, and use **Select Files** on the `file` row (required).\n\n**SSE:** `GET /events/stream` is a long-lived stream; Postman may buffer or time out—use **curl -N** for a reliable SSE test.\n\n**Auth:** Optional `Authorization` header is accepted but not enforced (placeholder).",
+    "description": "FastAPI surface for local dev (`pdm run api` on port 8000 by default).\n\n**`baseUrl` is required.** Import **`VerifiedSignal.local.postman_environment.json`** and select environment **VerifiedSignal local**, or set collection variable **`baseUrl`** to `http://127.0.0.1:8000` (or your `LOCAL_API_PORT`). If `baseUrl` is empty, Postman may send invalid URLs like `http:///?q=...`.\n\n**Document intake:** `POST /api/v1/documents` is **multipart/form-data**. After import, open **Upload document**, choose **Body → form-data**, and use **Select Files** on the `file` row (required).\n\n**SSE:** `GET /events/stream` is a long-lived stream; Postman may buffer or time out—use **curl -N** for a reliable SSE test.\n\n**Auth:** Optional `Authorization` header is accepted but not enforced (placeholder).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://127.0.0.1:8000"
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
     }
   ],
   "item": [
@@ -83,22 +84,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/search?q=&limit=10",
-              "query": [
-                {
-                  "key": "q",
-                  "value": "",
-                  "description": "Query string (stub until OpenSearch-backed search exists)."
-                },
-                {
-                  "key": "limit",
-                  "value": "10",
-                  "description": "1–100"
-                }
-              ]
-            },
-            "description": "Search stub; parameters accepted for future OpenSearch wiring."
+            "url": "{{baseUrl}}/api/v1/search?q=&limit=10",
+            "description": "Search stub. Edit `q` and `limit` in the URL (Params tab may not apply with `{{baseUrl}}`—change the query string here). Uses plain URL so Postman does not build `http:///?q=...` when `baseUrl` is unset."
           },
           "response": []
         }
