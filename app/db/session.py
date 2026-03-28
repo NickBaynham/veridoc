@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.config import get_settings
+from app.core.config import effective_database_url
 
 _engine: Engine | None = None
 _SessionLocal: sessionmaker[Session] | None = None
@@ -25,7 +25,7 @@ def _sqlalchemy_url_for_psycopg3(url: str) -> str:
 def get_engine() -> Engine:
     global _engine, _SessionLocal
     if _engine is None:
-        url = _sqlalchemy_url_for_psycopg3(get_settings().database_url)
+        url = _sqlalchemy_url_for_psycopg3(effective_database_url())
         _engine = create_engine(url, pool_pre_ping=True)
         _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
     return _engine

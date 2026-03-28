@@ -81,5 +81,17 @@ def get_settings() -> Settings:
     return Settings()
 
 
+def effective_database_url() -> str:
+    """
+    URL used for DB connections. Prefer live os.environ so pytest / make ci-local match
+    integration helpers that use getenv (Settings + field_validator alone can still diverge
+    from process env with pydantic-settings merge order).
+    """
+    direct = os.environ.get("DATABASE_URL")
+    if direct is not None and direct.strip() != "":
+        return direct.strip()
+    return get_settings().database_url
+
+
 def reset_settings_cache() -> None:
     get_settings.cache_clear()
