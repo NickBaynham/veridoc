@@ -25,7 +25,8 @@ jobs:
           --health-retries=10
 
     env:
-      DATABASE_URL: postgresql://verifiedsignal:verifiedsignal@localhost:5432/verifiedsignal
+      # Use 127.0.0.1: on GHA, localhost can prefer IPv6 (::1) while the mapped port is IPv4-only.
+      DATABASE_URL: postgresql://verifiedsignal:verifiedsignal@127.0.0.1:5432/verifiedsignal
 
     steps:
       - uses: actions/checkout@v4
@@ -42,16 +43,30 @@ jobs:
 
       - name: Wait for Postgres and apply migrations
         run: |
+          set -euo pipefail
+          PGHOST=127.0.0.1
+          PGPORT=5432
+          PGUSER=verifiedsignal
+          PGDATABASE=verifiedsignal
+          export PGPASSWORD=verifiedsignal
           sudo apt-get update
           sudo apt-get install -y postgresql-client
-          until pg_isready -h localhost -p 5432 -U verifiedsignal; do sleep 1; done
-          PGPASSWORD=verifiedsignal psql -h localhost -U verifiedsignal -d verifiedsignal -v ON_ERROR_STOP=1 \
-            -f db/migrations/001_initial_schema.up.sql
-          PGPASSWORD=verifiedsignal psql -h localhost -U verifiedsignal -d verifiedsignal -v ON_ERROR_STOP=1 \
-            -f db/migrations/002_intake_document_fields.up.sql
+          until pg_isready -h "$PGHOST" -p "$PGPORT" -U "$PGUSER"; do sleep 1; done
+          attempt=0
+          until psql -c "SELECT 1" >/dev/null; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -ge 30 ]; then
+              echo "Postgres did not accept authenticated connections in time"
+              exit 1
+            fi
+            sleep 1
+          done
+          psql -v ON_ERROR_STOP=1 -f db/migrations/001_initial_schema.up.sql
+          psql -v ON_ERROR_STOP=1 -f db/migrations/002_intake_document_fields.up.sql
+          psql -c "SELECT 1"
 
       - name: Ruff
-        run: pdm run ruff check src tests app worker
+        run: pdm run python -m ruff check src tests app worker
 
       - name: Tests
         run: pdm run python -m pytest -v --tb=short
