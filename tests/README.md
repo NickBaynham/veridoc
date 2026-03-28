@@ -29,7 +29,7 @@ API integration tests (`test_api_routes.py`) use the shared **`api_client`** fix
 
 ## Integration tests and `api_client`
 
-Defined in **`tests/conftest.py`**. Patches **`app.api.routes.health.database_health_check`** so `/health` reports **ok** without a live Postgres (patch the name the route module uses).
+Defined in **`tests/conftest.py`**. Patches **`app.api.routes.health.database_health_check`** (Postgres) and **`check_opensearch_component`** so `/health` is **ok** without live Postgres or OpenSearch (patch names the route module uses).
 
 ## CI
 

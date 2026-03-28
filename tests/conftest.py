@@ -34,6 +34,10 @@ def api_client(monkeypatch):
             dsn_preview="postgresql://stub:***@127.0.0.1:5432/stub",
         ),
     )
+    monkeypatch.setattr(
+        "app.api.routes.health.check_opensearch_component",
+        lambda _settings=None: ("up", None, None),
+    )
 
     from fastapi.testclient import TestClient
 

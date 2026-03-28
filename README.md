@@ -7,7 +7,7 @@ A document intelligence platform. This repository uses **Python** with **[PDM](h
 This repo is an **early scaffold** with the following in place:
 
 - **CLI package** — Python **3.11+**, `src/verifiedsignal/`, small CLI (`pdm run python -m verifiedsignal`, `pdm run verifiedsignal`).
-- **HTTP API** — root package **`app/`**: **FastAPI** (`app/main.py`), **`/api/v1`** routes for health, info, **Phase 1 document intake** (`POST /api/v1/documents` multipart upload → Postgres + MinIO/S3 + ARQ), search stub, and **SSE** (`/api/v1/events/stream`). **SQLAlchemy** session factory for Postgres (`app/db/session.py`); placeholder auth (`app/auth/placeholder.py`).
+- **HTTP API** — root package **`app/`**: **FastAPI** (`app/main.py`), **`/api/v1`** routes for **health** (Postgres, Redis, object storage, OpenSearch reachability), info, **Phase 1 document intake** (`POST /api/v1/documents` multipart upload → Postgres + MinIO/S3 + ARQ), search stub, and **SSE** (`/api/v1/events/stream`). **SQLAlchemy** session factory for Postgres (`app/db/session.py`); placeholder auth (`app/auth/placeholder.py`).
 - **Worker** — root package **`worker/`**: **[ARQ](https://arq-docs.helpmanual.io/)** worker on Redis (`pdm run worker`), `process_document` task with **simulated pipeline stages** (`worker/pipeline.py`). Intended to evolve into real ingestion, scoring, and OpenSearch indexing (all driven from Postgres truth).
 - **PDM** — `pyproject.toml`, **`pdm.lock`**, scripts: **`pdm run api`** (uvicorn reload), **`pdm run api-prod`**, **`pdm run worker`**, dev group (**pytest**, **ruff**, etc.).
 - **Makefile** — `setup`, `lock` / `sync`, `test` / `test-unit` / `test-integration` / `test-e2e` / **`test-api`**, **`ci-local`** / **`ci-local-stop`**, `lint`, `format`, Docker targets.

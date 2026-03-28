@@ -20,7 +20,7 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/v1/health",
-            "description": "Liveness; `database` reflects Postgres connectivity from the API process."
+            "description": "Postgres (`database`), Redis (`redis`), S3/MinIO (`object_storage`), OpenSearch/ES (`opensearch`). Values: `up`, `down`, or `stub` when USE_FAKE_QUEUE / USE_FAKE_STORAGE. Non-production adds `*_error` fields when a dependency is down."
           },
           "response": []
         },

@@ -12,6 +12,9 @@ def test_health_ok(api_client):
     body = r.json()
     assert body["status"] == "ok"
     assert body["database"] == "up"
+    assert body["redis"] == "stub"
+    assert body["object_storage"] == "stub"
+    assert body["opensearch"] == "up"
 
 
 @pytest.mark.integration
