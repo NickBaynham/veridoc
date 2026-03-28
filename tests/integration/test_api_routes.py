@@ -6,6 +6,13 @@ import pytest
 
 
 @pytest.mark.integration
+def test_root_is_swagger_ui(api_client):
+    r = api_client.get("/")
+    assert r.status_code == 200
+    assert "swagger" in r.text.lower()
+
+
+@pytest.mark.integration
 def test_health_ok(api_client):
     r = api_client.get("/api/v1/health")
     assert r.status_code == 200

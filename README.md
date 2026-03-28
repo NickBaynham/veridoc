@@ -179,6 +179,8 @@ Point the API at MinIO with **`S3_ENDPOINT_URL`** (e.g. `http://127.0.0.1:9000`)
 
 ### Minimal API checks
 
+**OpenAPI:** Swagger UI is served at the **root** (`http://127.0.0.1:8000/`). Machine-readable schema: **`GET /openapi.json`**. Alternative docs: **`/redoc`**. Legacy path **`/docs`** redirects to **`/`**.
+
 ```bash
 curl -s http://127.0.0.1:8000/api/v1/health | jq
 curl -s -X POST http://127.0.0.1:8000/api/v1/documents \

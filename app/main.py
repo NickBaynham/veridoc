@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.routes import (
@@ -70,9 +70,23 @@ def create_app() -> FastAPI:
     settings = get_settings()
     application = FastAPI(
         title=settings.app_name,
+        description=(
+            "VerifiedSignal HTTP API: session auth under **`/auth`** (Supabase-backed); "
+            "versioned resources under **`/api/v1`** "
+            "(health, documents, collections, users, search, events)."
+        ),
+        version="0.1.0",
         lifespan=lifespan,
+        docs_url="/",
+        redoc_url="/redoc",
+        openapi_url="/openapi.json",
     )
     _register_exception_handlers(application)
+
+    @application.get("/docs", include_in_schema=False)
+    async def redirect_legacy_docs() -> RedirectResponse:
+        """Old default path; interactive docs live at `/`."""
+        return RedirectResponse(url="/", status_code=307)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
