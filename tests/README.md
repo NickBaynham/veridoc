@@ -33,4 +33,4 @@ Defined in **`tests/conftest.py`**. Patches **`app.api.routes.health.check_datab
 
 ## CI
 
-GitHub Actions runs **`pdm run pytest`** (all markers) plus Ruff on **`src`**, **`tests`**, **`app`**, and **`worker`**.
+GitHub Actions runs **`pdm run python -m pytest`** (all markers) plus Ruff on **`src`**, **`tests`**, **`app`**, and **`worker`**. Locally, **`make ci-local`** approximates that flow (see the root **`README.md`**).

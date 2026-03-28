@@ -1,9 +1,14 @@
-.PHONY: help setup lock sync install test test-unit test-integration test-e2e test-api lint format clean config resources docker-build docker-up docker-down docker-test docker-run
+.PHONY: help setup lock sync install test test-unit test-integration test-e2e test-api lint format clean config resources docker-build docker-up docker-down docker-test docker-run ci-local ci-local-stop ci-local-postgres ci-local-migrate
 
 # Default Python / PDM (override if needed)
 PYTHON ?= python3
 PDM ?= pdm
 DOCKER_COMPOSE ?= docker compose
+
+# Ephemeral Postgres for `make ci-local` (same image/credentials as GitHub Actions). Override if 5432 is taken.
+CI_LOCAL_PG_CONTAINER ?= verifiedsignal-ci-postgres
+CI_LOCAL_PG_PORT ?= 5432
+CI_LOCAL_PG_URL = postgresql://verifiedsignal:verifiedsignal@127.0.0.1:$(CI_LOCAL_PG_PORT)/verifiedsignal
 
 help:
 	@echo "VerifiedSignal — common targets"
@@ -27,6 +32,8 @@ help:
 	@echo "  make docker-down    Stop app stack"
 	@echo "  make docker-test    Run tests in Docker (compose profile: test)"
 	@echo "  make docker-run     One-off app container run"
+	@echo "  make ci-local       Ephemeral Postgres:16 + migrations + Ruff + pytest (mirrors CI)"
+	@echo "  make ci-local-stop  Remove the ci-local Postgres container"
 
 setup: config
 	@command -v $(PDM) >/dev/null 2>&1 || { echo "Install PDM: https://pdm-project.org/latest/#installation"; exit 1; }
@@ -85,3 +92,24 @@ docker-test: config docker-build
 
 docker-run: config docker-build
 	$(DOCKER_COMPOSE) run --rm app
+
+ci-local-stop:
+	docker rm -f $(CI_LOCAL_PG_CONTAINER) 2>/dev/null || true
+
+ci-local-postgres: ci-local-stop
+	docker run -d --name $(CI_LOCAL_PG_CONTAINER) -p $(CI_LOCAL_PG_PORT):5432 \
+		-e POSTGRES_USER=verifiedsignal \
+		-e POSTGRES_PASSWORD=verifiedsignal \
+		-e POSTGRES_DB=verifiedsignal \
+		postgres:16-alpine
+	until docker exec $(CI_LOCAL_PG_CONTAINER) pg_isready -U verifiedsignal -d verifiedsignal; do sleep 1; done
+
+ci-local-migrate: ci-local-postgres
+	docker exec -i $(CI_LOCAL_PG_CONTAINER) psql -U verifiedsignal -d verifiedsignal -v ON_ERROR_STOP=1 \
+		< db/migrations/001_initial_schema.up.sql
+	docker exec -i $(CI_LOCAL_PG_CONTAINER) psql -U verifiedsignal -d verifiedsignal -v ON_ERROR_STOP=1 \
+		< db/migrations/002_intake_document_fields.up.sql
+
+ci-local: ci-local-migrate
+	env DATABASE_URL='$(CI_LOCAL_PG_URL)' $(PDM) run python -m ruff check src tests app worker
+	env DATABASE_URL='$(CI_LOCAL_PG_URL)' $(PDM) run python -m pytest -v --tb=short
