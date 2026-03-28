@@ -8,6 +8,10 @@ from pydantic import BaseModel
 class HealthResponse(BaseModel):
     status: str
     database: str
+    # Populated outside production to troubleshoot connection failures (password never shown).
+    database_dsn_preview: str | None = None
+    database_error_type: str | None = None
+    database_error: str | None = None
 
 
 class InfoResponse(BaseModel):

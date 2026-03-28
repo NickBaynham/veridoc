@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
+from urllib.parse import urlparse, urlunparse
 from uuid import UUID
 
 from pydantic import Field, field_validator
@@ -91,6 +92,21 @@ def effective_database_url() -> str:
     if direct is not None and direct.strip() != "":
         return direct.strip()
     return get_settings().database_url
+
+
+def preview_database_url(url: str) -> str:
+    """Redact password from a Postgres URL for logs / non-production health responses."""
+    try:
+        parsed = urlparse(url)
+        netloc = parsed.netloc
+        if "@" in netloc:
+            userinfo, hostport = netloc.rsplit("@", 1)
+            user = userinfo.split(":", 1)[0] if ":" in userinfo else userinfo
+            netloc = f"{user}:***@{hostport}"
+        path = parsed.path if parsed.path else "/"
+        return urlunparse((parsed.scheme, netloc, path, parsed.params, "", ""))
+    except Exception:
+        return "<could not parse DATABASE_URL>"
 
 
 def reset_settings_cache() -> None:

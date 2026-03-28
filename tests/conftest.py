@@ -19,7 +19,7 @@ def api_client(monkeypatch):
     monkeypatch.setenv("USE_FAKE_STORAGE", "true")
 
     from app.core.config import reset_settings_cache
-    from app.db.session import reset_engine
+    from app.db.session import DatabaseHealthResult, reset_engine
     from app.main import create_app
     from app.services.event_service import reset_event_hub
     from app.services.queue_backend import close_job_queue
@@ -27,8 +27,13 @@ def api_client(monkeypatch):
 
     reset_settings_cache()
     reset_object_storage()
-    # Patch where the route module binds the name (not only db.session).
-    monkeypatch.setattr("app.api.routes.health.check_database_connection", lambda: True)
+    monkeypatch.setattr(
+        "app.api.routes.health.database_health_check",
+        lambda: DatabaseHealthResult(
+            ok=True,
+            dsn_preview="postgresql://stub:***@127.0.0.1:5432/stub",
+        ),
+    )
 
     from fastapi.testclient import TestClient
 

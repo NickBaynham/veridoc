@@ -3,16 +3,25 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from dataclasses import dataclass
 
 import psycopg
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.config import effective_database_url
+from app.core.config import effective_database_url, preview_database_url
 
 _engine: Engine | None = None
 _SessionLocal: sessionmaker[Session] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DatabaseHealthResult:
+    ok: bool
+    dsn_preview: str
+    error_type: str | None = None
+    error_message: str | None = None
 
 
 def get_engine() -> Engine:
@@ -46,14 +55,29 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def check_database_connection() -> bool:
-    """Return True if SELECT 1 succeeds."""
+def database_health_check() -> DatabaseHealthResult:
+    """Run SELECT 1; include redacted DSN and error details for non-production /health."""
+    dsn = effective_database_url()
+    preview = preview_database_url(dsn)
     try:
         with get_engine().connect() as conn:
             conn.execute(text("SELECT 1"))
-        return True
-    except Exception:
-        return False
+        return DatabaseHealthResult(ok=True, dsn_preview=preview)
+    except Exception as e:
+        msg = str(e)
+        if len(msg) > 800:
+            msg = msg[:800] + "…"
+        return DatabaseHealthResult(
+            ok=False,
+            dsn_preview=preview,
+            error_type=type(e).__name__,
+            error_message=msg,
+        )
+
+
+def check_database_connection() -> bool:
+    """Return True if SELECT 1 succeeds."""
+    return database_health_check().ok
 
 
 def reset_engine() -> None:
