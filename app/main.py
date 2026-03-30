@@ -71,9 +71,10 @@ def create_app() -> FastAPI:
     application = FastAPI(
         title=settings.app_name,
         description=(
-            "VerifiedSignal HTTP API: session auth under **`/auth`** (Supabase-backed); "
-            "versioned resources under **`/api/v1`** "
-            "(health, documents, collections, users, search, events)."
+            "VerifiedSignal HTTP API: session auth under **`/auth`** (Supabase-backed, including "
+            "**`/auth/sync-identity`**); versioned resources under **`/api/v1`** "
+            "(health, documents, collections, users, search, events). "
+            "Bearer JWTs can auto-provision Postgres tenancy (users, org, inbox)."
         ),
         version="0.1.0",
         lifespan=lifespan,

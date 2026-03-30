@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
+from app.services.identity_service import find_user_id_by_auth_sub
 
 
 def resolve_accessible_collection_ids(
@@ -20,33 +21,20 @@ def resolve_accessible_collection_ids(
 
     If a row exists, return collection ids for orgs that user belongs to.
 
-    If no user row exists (typical local dev before user sync), fall back to
-    `VERIFIEDSIGNAL_DEFAULT_COLLECTION_ID` only so intake + listing work without seeding users.
+    If no user row exists: when `VERIFIEDSIGNAL_ALLOW_DEFAULT_COLLECTION_FALLBACK` is true and
+    `VERIFIEDSIGNAL_DEFAULT_COLLECTION_ID` is set, return that single id (legacy local dev).
+    Otherwise return no collections (use with auto-provision or explicit provisioning).
     """
-    uid: uuid.UUID | None = None
-    try:
-        uid = uuid.UUID(auth_sub.strip())
-    except ValueError:
-        pass
+    user_id = find_user_id_by_auth_sub(session, auth_sub)
 
-    row = None
-    if uid is not None:
-        row = session.execute(
-            text("SELECT id FROM users WHERE id = :uid OR external_sub = :sub"),
-            {"uid": uid, "sub": auth_sub.strip()},
-        ).fetchone()
-    else:
-        row = session.execute(
-            text("SELECT id FROM users WHERE external_sub = :sub"),
-            {"sub": auth_sub.strip()},
-        ).fetchone()
-
-    if row is None:
-        if settings.default_collection_id is not None:
+    if user_id is None:
+        if (
+            settings.allow_default_collection_fallback
+            and settings.default_collection_id is not None
+        ):
             return [settings.default_collection_id]
         return []
 
-    user_id = row[0]
     cols = session.execute(
         text(
             """

@@ -53,6 +53,21 @@ class Settings(BaseSettings):
         validation_alias="VERIFIEDSIGNAL_DEFAULT_COLLECTION_ID",
     )
 
+    # Map Supabase JWT to Postgres: create users + personal org + inbox on first Bearer request.
+    auto_provision_identity: bool = Field(
+        default=True,
+        validation_alias="VERIFIEDSIGNAL_AUTO_PROVISION_IDENTITY",
+    )
+    # When false, JWTs without a users row do not get the seeded default inbox (prod multi-tenant).
+    allow_default_collection_fallback: bool = Field(
+        default=True,
+        validation_alias="VERIFIEDSIGNAL_ALLOW_DEFAULT_COLLECTION_FALLBACK",
+        description=(
+            "If no Postgres user row matches the JWT and auto-provision is off, fall back to "
+            "VERIFIEDSIGNAL_DEFAULT_COLLECTION_ID when set (local dev). Disable in production."
+        ),
+    )
+
     max_upload_bytes: int = Field(default=52_428_800, validation_alias="MAX_UPLOAD_BYTES")  # 50 MiB
 
     # URL-based document intake (worker fetches remote bytes → same S3 + pipeline as multipart).

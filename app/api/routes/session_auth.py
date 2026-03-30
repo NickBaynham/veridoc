@@ -10,6 +10,9 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError
+from sqlalchemy.orm import Session
 from supabase_auth.errors import (
     AuthApiError,
     AuthInvalidCredentialsError,
@@ -17,6 +20,8 @@ from supabase_auth.errors import (
     AuthWeakPasswordError,
 )
 
+from app.api.deps import get_db
+from app.auth.jwt_verify import decode_access_token_claims
 from app.auth.supabase_service import get_supabase_service_client
 from app.core.config import Settings, get_settings
 from app.schemas.auth_api import (
@@ -26,8 +31,16 @@ from app.schemas.auth_api import (
     ResetPasswordBody,
     SignupResponse,
 )
+from app.schemas.user_api import SyncIdentityOut
+from app.services.identity_service import (
+    ensure_personal_tenant_for_claims,
+    find_user_id_by_auth_sub,
+    list_tenant_ids_for_user,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+sync_bearer = HTTPBearer(auto_error=True)
 
 REFRESH_COOKIE = "vs_refresh_token"
 REFRESH_MAX_AGE = 7 * 24 * 3600
@@ -63,6 +76,45 @@ def auth_signup(
             raise HTTPException(status_code=400, detail="Email already registered") from e
         raise HTTPException(status_code=400, detail=_auth_error_detail(e)) from e
     return SignupResponse()
+
+
+@router.post("/sync-identity", response_model=SyncIdentityOut)
+def auth_sync_identity(
+    credentials: HTTPAuthorizationCredentials = Depends(sync_bearer),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> SyncIdentityOut:
+    """
+    Ensure Postgres `users` + personal org + `organization_members` + inbox `collections` exist.
+
+    Call after login if the SPA prefers an explicit hook; otherwise the first `Authorization`
+    request with auto-provision enabled already performs the same work.
+    """
+    try:
+        claims = decode_access_token_claims(credentials.credentials, settings)
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from None
+
+    _, created = ensure_personal_tenant_for_claims(db, claims, settings)
+    if created:
+        db.commit()
+
+    db_uid = find_user_id_by_auth_sub(db, claims.sub)
+    if db_uid is None:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "No Postgres user linked to this token. Enable "
+                "VERIFIEDSIGNAL_AUTO_PROVISION_IDENTITY or create users/organization_members "
+                "manually."
+            ),
+        )
+    org_ids, col_ids = list_tenant_ids_for_user(db, db_uid)
+    return SyncIdentityOut(
+        database_user_id=db_uid,
+        organization_ids=org_ids,
+        collection_ids=col_ids,
+    )
 
 
 @router.post("/login", response_model=AccessTokenResponse)

@@ -18,7 +18,13 @@ def list_collections(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user),
 ) -> CollectionListResponse:
-    """Collections for the caller's orgs, or default inbox (dev fallback: `document_access`)."""
+    """
+    Collections for the caller's org memberships.
+
+    Without a Postgres user row: if `VERIFIEDSIGNAL_ALLOW_DEFAULT_COLLECTION_FALLBACK` is true,
+    the seeded default inbox may appear (local dev). With auto-provision, the first Bearer request
+    creates a personal org + inbox.
+    """
     rows = list_collections_for_user(db, auth_sub=user_id)
     return CollectionListResponse(
         collections=[

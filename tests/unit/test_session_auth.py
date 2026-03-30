@@ -152,6 +152,16 @@ def test_documents_with_valid_jwt(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("JWT_AUDIENCE", "authenticated")
     reset_settings_cache()
 
+    def _fake_get_db():
+        yield MagicMock()
+
+    monkeypatch.setattr("app.auth.dependencies.get_db", _fake_get_db)
+    monkeypatch.setattr("app.api.routes.documents.get_db", _fake_get_db)
+    monkeypatch.setattr(
+        "app.auth.dependencies.ensure_personal_tenant_for_claims",
+        lambda *_a, **_k: (None, False),
+    )
+
     def _fake_list(*_a, **_k):
         return ([], 0)
 

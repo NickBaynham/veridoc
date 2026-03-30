@@ -46,6 +46,10 @@ def resolve_collection_id(
     settings: Settings,
 ) -> uuid.UUID:
     if collection_id_param is None or collection_id_param.strip() == "":
+        if not settings.allow_default_collection_fallback:
+            raise IntakeValidationError(
+                "collection_id is required (default collection fallback is disabled)"
+            )
         if settings.default_collection_id is None:
             raise IntakeValidationError(
                 "collection_id is required (or set VERIFIEDSIGNAL_DEFAULT_COLLECTION_ID)"

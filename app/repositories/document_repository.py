@@ -107,6 +107,8 @@ def finalize_intake_after_upload(
         raise ValueError(f"document not found: {document_id}")
     doc.storage_key = storage_key
     doc.status = "queued"
+    doc.file_size = file_size
+    doc.content_type = content_type
     src = DocumentSource(
         document_id=document_id,
         source_kind="upload",

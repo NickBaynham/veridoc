@@ -25,6 +25,8 @@ Schema integration tests (`test_schema_*.py`) connect with **`psycopg`** using *
 
 **Intake** integration tests (`test_document_intake.py`) use the **`intake_api_client`** fixture: real Postgres, **`USE_FAKE_QUEUE=true`**, **`USE_FAKE_STORAGE=true`** (in-memory S3 stand-in), full multipart **`POST /api/v1/documents`** flow.
 
+**Identity / tenancy** integration and **e2e** tests use **`jwt_integration_client`** from **`tests/conftest.py`**: real Postgres, HS256 tokens, **no** `get_current_user` override, `SUPABASE_JWT_SECRET` set for the fixture. Skips when **`DATABASE_URL`** is unset.
+
 API integration tests (`test_api_routes.py`) use the shared **`api_client`** fixture: fake queue, **fake storage**, patched DB health, and cleaned global state after each test.
 
 ## Integration tests and `api_client`

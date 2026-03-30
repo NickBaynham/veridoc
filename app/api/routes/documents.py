@@ -40,8 +40,7 @@ def list_documents(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> DocumentListResponse:
     """
-    List documents in collections the caller can access
-    (org membership or default-collection dev fallback).
+    List documents in collections the caller can access (org membership; optional dev fallback).
     """
     items, total = list_documents_for_user(db, auth_sub=user_id, limit=limit, offset=offset)
     return DocumentListResponse(
