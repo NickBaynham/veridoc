@@ -1,5 +1,7 @@
 # URL-based document intake
 
+**End-user how-to:** [`end-user/documents.md#submitting-a-document-by-url`](end-user/documents.md#submitting-a-document-by-url) — this page is the **technical** reference (worker, SSRF, env vars).
+
 Submit a **remote HTTPS (or HTTP in dev) URL** instead of uploading bytes through the browser. The flow matches **multipart file intake** after bytes are stored: same **`raw/{document_id}/…`** object key, **`document_sources`** `upload` row, and **`process_document`** ARQ job.
 
 ## API

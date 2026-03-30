@@ -12,7 +12,7 @@ This app ships a **clickable product demo** aligned with the [VerifiedSignal use
 
 The SPA should use **Supabase JS** only where the auth spec requires it (e.g. password reset from emailed link); **login, signup, logout, and refresh** should call the FastAPI API (`VITE_API_URL`) so the refresh token stays **httpOnly** on the API origin. See [`docs/auth-supabase.md`](../../docs/auth-supabase.md) at the repo root.
 
-After you receive an access token, either call **`POST /auth/sync-identity`** with `Authorization: Bearer …` or hit any protected API route: the backend can **create your Postgres user, personal org, and Inbox** automatically (see **[`docs/accounts-and-collections.md`](../../docs/accounts-and-collections.md)**).
+After you receive an access token, either call **`POST /auth/sync-identity`** with `Authorization: Bearer …` or hit any protected API route: the backend can **create your Postgres user, personal org, and Inbox** automatically. Read **[`docs/end-user/README.md`](../../docs/end-user/README.md)** for the full user-facing API guide.
 
 ## Setup
 

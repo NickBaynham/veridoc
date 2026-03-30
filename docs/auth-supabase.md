@@ -16,7 +16,7 @@ Refresh cookie name: `vs_refresh_token` (path `/auth`).
 
 Scaffold with Vite + React + TypeScript; keep access tokens **in memory only**; call FastAPI for session operations. After login you can call **`POST /auth/sync-identity`** or rely on the first protected API request to provision Postgres. See `apps/web/README.md` and `supabase/README.md`.
 
-**End-user overview:** **[`docs/accounts-and-collections.md`](accounts-and-collections.md)**.
+**End-user guide:** **[`end-user/README.md`](end-user/README.md)** (accounts/collections summary: [`accounts-and-collections.md`](accounts-and-collections.md)).
 
 ## Tests
 

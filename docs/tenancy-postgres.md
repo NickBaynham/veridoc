@@ -32,5 +32,6 @@ Intake without `collection_id` also requires fallback (or an explicit default co
 
 ## Related docs
 
-- [`docs/auth-supabase.md`](auth-supabase.md) — JWT, session routes, env vars.
-- [`docs/accounts-and-collections.md`](accounts-and-collections.md) — end-user summary.
+- [`auth-supabase.md`](auth-supabase.md) — JWT, session routes, env vars.
+- [`end-user/README.md`](end-user/README.md) — full end-user guide.
+- [`accounts-and-collections.md`](accounts-and-collections.md) — short pointer + quick summary.

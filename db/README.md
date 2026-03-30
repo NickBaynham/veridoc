@@ -11,6 +11,8 @@ This directory holds **canonical** schema definitions for VerifiedSignal. The ap
 | `migrations/002_intake_document_fields.up.sql` | Intake columns on **`documents`**, expanded **`documents.status`** check, **`document_sources`**-ready lifecycle; seeds **`local-dev`** org and **`default-inbox`** collection for local UUIDs. |
 | `migrations/002_intake_document_fields.down.sql` | Rollback (destructive; removes seeded rows by id/slug). |
 
+**Planned (not yet a committed migration file):** document metadata and tagging — see **[`docs/document-metadata-design.md`](../docs/document-metadata-design.md)** for the full design and appendix DDL sketch (`user_metadata`, `analysis_metadata`, `document_tags`).
+
 ### Applying manually
 
 From the repo root, with **Docker Compose Postgres** already running (`docker compose up -d postgres`):
@@ -76,7 +78,7 @@ After migrations are applied, **`pytest -m integration`** (see [`tests/README.md
 - **UUID primary keys** — Safe generation across services; stable public identifiers for sync to search.
 - **TEXT + CHECK** for statuses/stages — Adding a new value is a small, explicit migration without enum type surgery.
 - **`created_at` / `updated_at`** — Auditing and incremental export windows; trigger keeps `updated_at` consistent.
-- **JSONB** — `metadata`, `raw_metadata`, `run_metadata`, `error_detail`, `payload`, `score_payload` for evolution without wide nullable columns for every new field.
+- **JSONB** — `organizations.metadata`, `document_sources.raw_metadata`, `run_metadata`, `error_detail`, `payload`, `score_payload` for evolution without wide nullable columns for every new field. Planned document-level metadata is specified in **[`docs/document-metadata-design.md`](../docs/document-metadata-design.md)**.
 - **`score_schema_version` / `row_schema_version` / `definition_schema_version`** — Lets application code branch on row semantics during rolling upgrades.
 
 ### Why Postgres is canonical
