@@ -20,6 +20,15 @@ async def fetch_url_and_ingest(ctx: dict[str, Any], document_id: str) -> str:
     return document_id
 
 
+async def score_document(ctx: dict[str, Any], document_id: str) -> str:
+    """Stub scoring job: placeholder row in `document_scores` (real models TBD)."""
+    from app.services.score_document_worker import run_score_document_sync
+
+    log.info("task_score_document document_id=%s", document_id)
+    await asyncio.to_thread(run_score_document_sync, document_id)
+    return document_id
+
+
 async def process_document(ctx: dict[str, Any], document_id: str) -> str:
     """
     Background job: process a single document through the scaffold pipeline.

@@ -118,6 +118,12 @@ class Settings(BaseSettings):
         validation_alias="USE_FAKE_OPENSEARCH",
     )
 
+    # After scaffold pipeline, enqueue `score_document` (stub writes placeholder `document_scores`).
+    enqueue_score_after_pipeline: bool = Field(
+        default=False,
+        validation_alias="ENQUEUE_SCORE_AFTER_PIPELINE",
+    )
+
     # Must match worker `WorkerSettings.queue_name` / `VERIFIEDSIGNAL_ARQ_QUEUE`.
     arq_queue_name: str = Field(
         default="verifiedsignal:jobs",

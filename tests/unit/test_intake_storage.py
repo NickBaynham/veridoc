@@ -7,6 +7,7 @@ import uuid
 import pytest
 from app.services.storage_service import (
     InMemoryObjectStorage,
+    build_extract_artifact_key,
     build_raw_object_key,
     sanitize_filename,
 )
@@ -24,6 +25,20 @@ def test_build_raw_object_key_shape():
     key = build_raw_object_key(did, "My File (1).pdf")
     assert key.startswith(f"raw/{did}/")
     assert key.endswith(".pdf")
+
+
+@pytest.mark.unit
+def test_build_extract_artifact_key_shape():
+    did = uuid.UUID("00000000-0000-4000-8000-000000000099")
+    assert build_extract_artifact_key(did) == f"artifacts/{did}/extracted.txt"
+
+
+@pytest.mark.unit
+def test_in_memory_object_exists():
+    store = InMemoryObjectStorage(bucket="b1")
+    assert store.object_exists("nope") is False
+    store.upload_bytes("k", b"x", None)
+    assert store.object_exists("k") is True
 
 
 @pytest.mark.unit

@@ -17,6 +17,8 @@ class JobQueue(Protocol):
 
     async def enqueue_fetch_url_ingest(self, document_id: str) -> str: ...
 
+    async def enqueue_score_document(self, document_id: str) -> str: ...
+
 
 class InMemoryJobQueue:
     """Test-safe queue: records jobs; worker is not consuming these."""
@@ -38,6 +40,12 @@ class InMemoryJobQueue:
             self.jobs.append((job_id, "fetch_url_and_ingest", document_id))
         return job_id
 
+    async def enqueue_score_document(self, document_id: str) -> str:
+        job_id = str(uuid.uuid4())
+        async with self._lock:
+            self.jobs.append((job_id, "score_document", document_id))
+        return job_id
+
 
 class ArqJobQueue:
     """Enqueue ARQ jobs on Redis."""
@@ -55,6 +63,12 @@ class ArqJobQueue:
         job = await self._pool.enqueue_job("fetch_url_and_ingest", document_id)
         if job is None:
             raise RuntimeError("failed to enqueue fetch_url_and_ingest (duplicate job id?)")
+        return job.job_id
+
+    async def enqueue_score_document(self, document_id: str) -> str:
+        job = await self._pool.enqueue_job("score_document", document_id)
+        if job is None:
+            raise RuntimeError("failed to enqueue score_document (duplicate job id?)")
         return job.job_id
 
 

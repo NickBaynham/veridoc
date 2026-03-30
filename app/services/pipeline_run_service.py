@@ -15,6 +15,11 @@ from app.db.models import Document
 from app.pipeline.constants import DOCUMENT_SCAFFOLD_STAGES
 from app.repositories import pipeline_repository as pipe_repo
 from app.services.pipeline_extract_index import extract_body_text_stage, index_opensearch_stage
+from app.services.pipeline_stage_work import (
+    enrich_stage,
+    ingest_verify_storage_stage,
+    score_enqueue_stage,
+)
 
 log = logging.getLogger("verifiedsignal.pipeline.run")
 
@@ -54,8 +59,35 @@ def execute_scaffold_pipeline(session: Session, document_id: uuid.UUID, job_id: 
             log.info("pipeline_stage document_id=%s stage=%s job_id=%s", document_id, stage, job_id)
             step_seq += 1
 
-            if stage == "extract":
+            if stage == "ingest":
+                ingest_verify_storage_stage(
+                    session,
+                    document_id=document_id,
+                    run_id=run.id,
+                    step_index=step_seq,
+                    job_id=job_id,
+                )
+                step_seq += 1
+            elif stage == "extract":
                 extract_body_text_stage(
+                    session,
+                    document_id=document_id,
+                    run_id=run.id,
+                    step_index=step_seq,
+                    job_id=job_id,
+                )
+                step_seq += 1
+            elif stage == "enrich":
+                enrich_stage(
+                    session,
+                    document_id=document_id,
+                    run_id=run.id,
+                    step_index=step_seq,
+                    job_id=job_id,
+                )
+                step_seq += 1
+            elif stage == "score":
+                score_enqueue_stage(
                     session,
                     document_id=document_id,
                     run_id=run.id,

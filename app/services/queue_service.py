@@ -41,3 +41,19 @@ async def enqueue_fetch_url_ingest(document_id: str) -> str:
 
 def enqueue_fetch_url_ingest_sync(document_id: str) -> str:
     return asyncio.run(enqueue_fetch_url_ingest(document_id))
+
+
+async def enqueue_score_document(document_id: str) -> str:
+    log.info("enqueue_score_attempt document_id=%s", document_id)
+    try:
+        queue = await get_job_queue()
+        job_id = await queue.enqueue_score_document(document_id)
+        log.info("enqueue_score_success document_id=%s job_id=%s", document_id, job_id)
+        return job_id
+    except Exception:
+        log.exception("enqueue_score_failure document_id=%s", document_id)
+        raise
+
+
+def enqueue_score_document_sync(document_id: str) -> str:
+    return asyncio.run(enqueue_score_document(document_id))

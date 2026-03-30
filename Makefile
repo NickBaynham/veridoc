@@ -59,9 +59,10 @@ help:
 	@echo "  make docker-down    Stop app stack"
 	@echo "  make docker-test    Run tests in Docker (compose profile: test)"
 	@echo "  make docker-run     One-off app container run"
-	@echo "  make migrate        Apply 001, 002, then 003 (fails if 001 already applied — use migrate-002/003 or migrate-reset)"
+	@echo "  make migrate        Apply 001–004 (fails if 001 already applied — use migrate-00x or migrate-reset)"
 	@echo "  make migrate-002    Apply only 002 (when 001 is already on the database)"
 	@echo "  make migrate-003    Apply only 003 (body_text column; when 001+002 already applied)"
+	@echo "  make migrate-004    Apply only 004 (extract_artifact_key; when 001–003 already applied)"
 	@echo "  make migrate-reset  Drop app schema + re-apply 001+002 (dev only; needs MIGRATE_RESET_OK=1)"
 	@echo "  make api-local      Run FastAPI on host with 127.0.0.1 URLs (LOCAL_API_PG_PORT, LOCAL_API_PORT=8000)"
 	@echo "  make api-local-prod Same as api-local without --reload"
@@ -131,6 +132,7 @@ migrate:
 	$(DOCKER_COMPOSE) exec -T $(COMPOSE_POSTGRES_SERVICE) psql -U $(COMPOSE_DB_USER) -d $(COMPOSE_DB_NAME) -v ON_ERROR_STOP=1 < db/migrations/001_initial_schema.up.sql
 	$(DOCKER_COMPOSE) exec -T $(COMPOSE_POSTGRES_SERVICE) psql -U $(COMPOSE_DB_USER) -d $(COMPOSE_DB_NAME) -v ON_ERROR_STOP=1 < db/migrations/002_intake_document_fields.up.sql
 	$(DOCKER_COMPOSE) exec -T $(COMPOSE_POSTGRES_SERVICE) psql -U $(COMPOSE_DB_USER) -d $(COMPOSE_DB_NAME) -v ON_ERROR_STOP=1 < db/migrations/003_document_body_text.up.sql
+	$(DOCKER_COMPOSE) exec -T $(COMPOSE_POSTGRES_SERVICE) psql -U $(COMPOSE_DB_USER) -d $(COMPOSE_DB_NAME) -v ON_ERROR_STOP=1 < db/migrations/004_document_extract_artifact.up.sql
 
 migrate-002:
 	$(DOCKER_COMPOSE) exec -T $(COMPOSE_POSTGRES_SERVICE) psql -U $(COMPOSE_DB_USER) -d $(COMPOSE_DB_NAME) -v ON_ERROR_STOP=1 < db/migrations/002_intake_document_fields.up.sql
@@ -138,16 +140,21 @@ migrate-002:
 migrate-003:
 	$(DOCKER_COMPOSE) exec -T $(COMPOSE_POSTGRES_SERVICE) psql -U $(COMPOSE_DB_USER) -d $(COMPOSE_DB_NAME) -v ON_ERROR_STOP=1 < db/migrations/003_document_body_text.up.sql
 
+migrate-004:
+	$(DOCKER_COMPOSE) exec -T $(COMPOSE_POSTGRES_SERVICE) psql -U $(COMPOSE_DB_USER) -d $(COMPOSE_DB_NAME) -v ON_ERROR_STOP=1 < db/migrations/004_document_extract_artifact.up.sql
+
 migrate-reset:
 ifeq ($(MIGRATE_RESET_OK),1)
+	$(DOCKER_COMPOSE) exec -T $(COMPOSE_POSTGRES_SERVICE) psql -U $(COMPOSE_DB_USER) -d $(COMPOSE_DB_NAME) -v ON_ERROR_STOP=1 < db/migrations/004_document_extract_artifact.down.sql
 	$(DOCKER_COMPOSE) exec -T $(COMPOSE_POSTGRES_SERVICE) psql -U $(COMPOSE_DB_USER) -d $(COMPOSE_DB_NAME) -v ON_ERROR_STOP=1 < db/migrations/003_document_body_text.down.sql
 	$(DOCKER_COMPOSE) exec -T $(COMPOSE_POSTGRES_SERVICE) psql -U $(COMPOSE_DB_USER) -d $(COMPOSE_DB_NAME) -v ON_ERROR_STOP=1 < db/migrations/002_intake_document_fields.down.sql
 	$(DOCKER_COMPOSE) exec -T $(COMPOSE_POSTGRES_SERVICE) psql -U $(COMPOSE_DB_USER) -d $(COMPOSE_DB_NAME) -v ON_ERROR_STOP=1 < db/migrations/001_initial_schema.down.sql
 	$(DOCKER_COMPOSE) exec -T $(COMPOSE_POSTGRES_SERVICE) psql -U $(COMPOSE_DB_USER) -d $(COMPOSE_DB_NAME) -v ON_ERROR_STOP=1 < db/migrations/001_initial_schema.up.sql
 	$(DOCKER_COMPOSE) exec -T $(COMPOSE_POSTGRES_SERVICE) psql -U $(COMPOSE_DB_USER) -d $(COMPOSE_DB_NAME) -v ON_ERROR_STOP=1 < db/migrations/002_intake_document_fields.up.sql
 	$(DOCKER_COMPOSE) exec -T $(COMPOSE_POSTGRES_SERVICE) psql -U $(COMPOSE_DB_USER) -d $(COMPOSE_DB_NAME) -v ON_ERROR_STOP=1 < db/migrations/003_document_body_text.up.sql
+	$(DOCKER_COMPOSE) exec -T $(COMPOSE_POSTGRES_SERVICE) psql -U $(COMPOSE_DB_USER) -d $(COMPOSE_DB_NAME) -v ON_ERROR_STOP=1 < db/migrations/004_document_extract_artifact.up.sql
 else
-	@echo >&2 "migrate-reset drops all VerifiedSignal tables and data (003 down, 002 down, 001 down, then 001+002+003 up)."
+	@echo >&2 "migrate-reset drops all VerifiedSignal tables and data (004 down … 001 down, then 001…004 up)."
 	@echo >&2 "To confirm: make migrate-reset MIGRATE_RESET_OK=1"
 	@exit 1
 endif
@@ -189,6 +196,8 @@ ci-local-migrate-sql:
 		< db/migrations/002_intake_document_fields.up.sql
 	docker exec -i $(CI_LOCAL_PG_CONTAINER) psql -U verifiedsignal -d verifiedsignal -v ON_ERROR_STOP=1 \
 		< db/migrations/003_document_body_text.up.sql
+	docker exec -i $(CI_LOCAL_PG_CONTAINER) psql -U verifiedsignal -d verifiedsignal -v ON_ERROR_STOP=1 \
+		< db/migrations/004_document_extract_artifact.up.sql
 
 ci-local-migrate: ci-local-postgres ci-local-migrate-sql
 

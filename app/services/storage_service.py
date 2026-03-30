@@ -41,6 +41,11 @@ def build_raw_object_key(document_id: uuid.UUID, original_filename: str) -> str:
     return f"raw/{document_id}/{safe}"
 
 
+def build_extract_artifact_key(document_id: uuid.UUID) -> str:
+    """Deterministic key for pipeline-extracted UTF-8 text."""
+    return f"artifacts/{document_id}/extracted.txt"
+
+
 @runtime_checkable
 class ObjectStorage(Protocol):
     """Swappable storage backend (MinIO / S3 / fakes)."""
@@ -55,6 +60,8 @@ class ObjectStorage(Protocol):
     def upload_fileobj(self, key: str, fileobj: IO[bytes], content_type: str | None) -> None: ...
 
     def delete_object(self, key: str) -> None: ...
+
+    def object_exists(self, key: str) -> bool: ...
 
     def get_bytes(self, key: str) -> bytes: ...
 
@@ -82,6 +89,9 @@ class InMemoryObjectStorage:
 
     def delete_object(self, key: str) -> None:
         self.objects.pop(key, None)
+
+    def object_exists(self, key: str) -> bool:
+        return key in self.objects
 
     def get_bytes(self, key: str) -> bytes:
         if key not in self.objects:
@@ -163,6 +173,18 @@ class S3ObjectStorage:
             if code in ("404", "NoSuchKey", "NotFound"):
                 return
             raise StorageUploadError(f"delete object failed: {e}") from e
+        except BotoCoreError as e:
+            raise StorageUploadError(str(e)) from e
+
+    def object_exists(self, key: str) -> bool:
+        try:
+            self._client.head_object(Bucket=self._bucket, Key=key)
+            return True
+        except ClientError as e:
+            code = e.response.get("Error", {}).get("Code", "")
+            if code in ("404", "NoSuchKey", "NotFound"):
+                return False
+            raise StorageUploadError(f"head object failed: {e}") from e
         except BotoCoreError as e:
             raise StorageUploadError(str(e)) from e
 

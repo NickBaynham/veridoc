@@ -12,6 +12,8 @@ This directory holds **canonical** schema definitions for VerifiedSignal. The ap
 | `migrations/002_intake_document_fields.down.sql` | Rollback (destructive; removes seeded rows by id/slug). |
 | `migrations/003_document_body_text.up.sql` | Adds **`documents.body_text`** for extracted plain text (keyword search path). |
 | `migrations/003_document_body_text.down.sql` | Drops **`body_text`**. |
+| `migrations/004_document_extract_artifact.up.sql` | Adds **`documents.extract_artifact_key`** (object key for full extracted UTF-8 text). |
+| `migrations/004_document_extract_artifact.down.sql` | Drops **`extract_artifact_key`**. |
 
 **Planned (design only):** richer document metadata and tagging — **[`docs/document-metadata-design.md`](../docs/document-metadata-design.md)** (`user_metadata`, `analysis_metadata`, `document_tags`).
 
@@ -23,17 +25,19 @@ From the repo root, with **Docker Compose Postgres** already running (`docker co
 make migrate
 ```
 
-That applies **001**, **002**, and **003** via `docker compose exec` (same as below).
+That applies **001** through **004** via `docker compose exec` (same as below).
 
-**`relation "users" already exists`:** **001** is already applied. Either you only need **002** or **003**:
+**`relation "users" already exists`:** **001** is already applied. You may only need **002**, **003**, or **004**:
 
 ```bash
 make migrate-002
 # or, when 001+002 are applied but body_text is missing:
 make migrate-003
+# or, when 001–003 are applied but extract_artifact_key is missing:
+make migrate-004
 ```
 
-or the database is fully migrated already and you can ignore the error. To wipe dev data and re-run both migrations:
+or the database is fully migrated already and you can ignore the error. To wipe dev data and re-run migrations:
 
 ```bash
 make migrate-reset MIGRATE_RESET_OK=1
@@ -46,6 +50,7 @@ docker compose up -d postgres
 docker compose exec -T postgres psql -U verifiedsignal -d verifiedsignal -v ON_ERROR_STOP=1 < db/migrations/001_initial_schema.up.sql
 docker compose exec -T postgres psql -U verifiedsignal -d verifiedsignal -v ON_ERROR_STOP=1 < db/migrations/002_intake_document_fields.up.sql
 docker compose exec -T postgres psql -U verifiedsignal -d verifiedsignal -v ON_ERROR_STOP=1 < db/migrations/003_document_body_text.up.sql
+docker compose exec -T postgres psql -U verifiedsignal -d verifiedsignal -v ON_ERROR_STOP=1 < db/migrations/004_document_extract_artifact.up.sql
 ```
 
 Or from a host with `psql`:
@@ -54,6 +59,7 @@ Or from a host with `psql`:
 psql "postgresql://verifiedsignal:verifiedsignal@localhost:5432/verifiedsignal" -v ON_ERROR_STOP=1 -f db/migrations/001_initial_schema.up.sql
 psql "postgresql://verifiedsignal:verifiedsignal@localhost:5432/verifiedsignal" -v ON_ERROR_STOP=1 -f db/migrations/002_intake_document_fields.up.sql
 psql "postgresql://verifiedsignal:verifiedsignal@localhost:5432/verifiedsignal" -v ON_ERROR_STOP=1 -f db/migrations/003_document_body_text.up.sql
+psql "postgresql://verifiedsignal:verifiedsignal@localhost:5432/verifiedsignal" -v ON_ERROR_STOP=1 -f db/migrations/004_document_extract_artifact.up.sql
 ```
 
 Rollback (destructive):
@@ -73,7 +79,7 @@ After migrations are applied, **`pytest -m integration`** (see [`tests/README.md
 - **users** — Actors in the system; **organization_members** links users to **organizations** with a role (`owner`, `admin`, `member`, `viewer`).
 - **organizations** — Tenant boundary; owns **collections**.
 - **collections** — Groups **documents** under an org (`UNIQUE (organization_id, slug)`).
-- **documents** — Logical documents; **`body_text`** holds extracted plain text for keyword search; OpenSearch document id = `documents.id` for reindex.
+- **documents** — Logical documents; **`body_text`** holds extracted plain text (truncated) for keyword search; **`extract_artifact_key`** points at full extracted UTF-8 in object storage; OpenSearch document id = `documents.id` for reindex.
 - **document_sources** — Many sources per document (URL, upload, API, etc.) with `raw_metadata` JSONB.
 - **pipeline_runs** — One pipeline execution per document (name/version, `status`, `stage`, timing, errors).
 - **pipeline_events** — Append-style log lines per run (`step_index` + `event_type` + `payload` JSONB).

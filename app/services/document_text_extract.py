@@ -22,6 +22,11 @@ def _truncate(text: str, max_chars: int = MAX_BODY_TEXT_CHARS) -> str:
     return text[:max_chars]
 
 
+def truncate_for_body(text: str, max_chars: int = MAX_BODY_TEXT_CHARS) -> str:
+    """Bound Postgres `documents.body_text` / OpenSearch field size."""
+    return _truncate(text, max_chars)
+
+
 def _strip_html_loose(html: str) -> str:
     text = _HTML_TAG_RE.sub(" ", html)
     return " ".join(text.split())

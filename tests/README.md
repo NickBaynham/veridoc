@@ -5,7 +5,7 @@ Pytest is organized by **markers** (see `pyproject.toml`):
 | Marker | Scope | Requirements |
 |--------|--------|----------------|
 | **`unit`** | CLI, package metadata, migrations on disk, worker pipeline sim, event hub, document queue | None |
-| **`integration`** | Postgres schema, **document intake** (`test_document_intake.py`), **search pipeline** (`test_search_pipeline.py`), or FastAPI routes (stubbed DB health + fake queue/storage/OpenSearch via `api_client`) | Intake + schema: **`DATABASE_URL`** + migrations **001 + 002 + 003**. `api_client` tests: none (fixture stubs infra). |
+| **`integration`** | Postgres schema, **document intake** (`test_document_intake.py`), **search pipeline** (`test_search_pipeline.py`), or FastAPI routes (stubbed DB health + fake queue/storage/OpenSearch via `api_client`) | Intake + schema: **`DATABASE_URL`** + migrations **001–004**. `api_client` tests: none (fixture stubs infra). |
 | **`e2e`** | `docker compose config` + ASGI smoke (`test_api_http`) | **`docker`** on `PATH` for compose test only |
 | **`api`** | ASGI smoke (`TestClient`, multi-route) | None |
 
@@ -21,7 +21,7 @@ make test-api
 
 ## Integration tests and Postgres
 
-Schema integration tests (`test_schema_*.py`) connect with **`psycopg`** using **`DATABASE_URL`**. They **do not** apply migrations; your pipeline (or you locally) must run the SQL in `db/migrations/` first (**001**, **002**, **003**).
+Schema integration tests (`test_schema_*.py`) connect with **`psycopg`** using **`DATABASE_URL`**. They **do not** apply migrations; your pipeline (or you locally) must run the SQL in `db/migrations/` first (**001** through **004**).
 
 **Intake** integration tests (`test_document_intake.py`) use the **`intake_api_client`** fixture: real Postgres, **`USE_FAKE_QUEUE=true`**, **`USE_FAKE_STORAGE=true`** (in-memory S3 stand-in), full multipart **`POST /api/v1/documents`** flow.
 
