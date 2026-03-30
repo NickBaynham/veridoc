@@ -2,10 +2,13 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
+
+const DEMO_USER_KEY = "verifiedsignal_demo_user";
 
 export interface DemoUser {
   email: string;
@@ -20,8 +23,33 @@ interface DemoAuthState {
 
 const DemoAuthContext = createContext<DemoAuthState | null>(null);
 
+function readStoredUser(): DemoUser | null {
+  try {
+    const raw = sessionStorage.getItem(DEMO_USER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return null;
+    const email = (parsed as { email?: string }).email;
+    const name = (parsed as { name?: string }).name;
+    if (typeof email !== "string" || typeof name !== "string") return null;
+    return { email, name };
+  } catch {
+    return null;
+  }
+}
+
 export function DemoAuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<DemoUser | null>(null);
+  const [user, setUser] = useState<DemoUser | null>(() =>
+    typeof sessionStorage !== "undefined" ? readStoredUser() : null,
+  );
+
+  useEffect(() => {
+    if (user) {
+      sessionStorage.setItem(DEMO_USER_KEY, JSON.stringify(user));
+    } else {
+      sessionStorage.removeItem(DEMO_USER_KEY);
+    }
+  }, [user]);
 
   const login = useCallback((email: string, _password: string) => {
     const safe = email.trim() || "demo@verifiedsignal.io";
