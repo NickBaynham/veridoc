@@ -252,6 +252,8 @@ curl -N -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/api/v1/events/st
 | `make format` | Ruff format |
 | `make clean` | Drop local build/caches (`.pytest_cache`, `.ruff_cache`, etc.) |
 | `make resources` | Placeholder for future asset downloads |
+| `make web-config` | Create **`apps/web/.env.local`** from **`apps/web/.env.example`** if missing (API mode → **`http://127.0.0.1:8000`**) |
+| `make web-dev` | Run **`web-config`**, then Vite dev server in **`apps/web`** (install deps with **`npm install`** there first) |
 
 | Command | Purpose |
 |--------|---------|
@@ -325,6 +327,8 @@ Run `make` or `make help` to print this list from the Makefile.
 | `make docker-down` | `docker compose down` |
 | `make docker-test` | `make config`, build image, then run the `test` service (pytest in Docker) |
 | `make docker-run` | `make config`, build image, then one-off `app` container |
+| `make web-config` | Create **`apps/web/.env.local`** from **`apps/web/.env.example`** if missing |
+| `make web-dev` | **`web-config`**, then **`npm run dev`** in **`apps/web`** |
 
 Make variables **`PDM`** and **`DOCKER_COMPOSE`** default to `pdm` and `docker compose`; override them if your install paths or Compose wrapper differ.
 
@@ -366,6 +370,16 @@ The **app** service waits for **postgres** and **redis** only (MinIO/OpenSearch 
 **MinIO:** open `http://localhost:9001` and sign in with `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` from `.env` (defaults match the example file). Create a bucket named like `S3_BUCKET` (`verifiedsignal` by default) when you begin storing objects.
 
 `.env` is optional: **`app`** and **`test`** use `env_file` with `required: false`. Compose still applies defaults from `docker-compose.yml` when variables are unset. Run **`make config`** to create `.env` from **`.env.example`** so host port overrides and credentials stay consistent.
+
+### Web UI against the Docker API
+
+The React app lives in **`apps/web`** and is **not** part of Compose. To use **API mode** (real backend instead of mock demo data):
+
+1. **Stack + DB** — `docker compose up -d --build` (or **`make docker-up`**), then apply migrations if needed (**`make migrate`** on a fresh volume, or **`make migrate-002`** … **`migrate-005`** if **`users` already exists**).
+2. **Root `.env`** — After **`make config`**, keep **`CORS_ORIGINS`** and **`AUTH_COOKIE_SECURE`** as in **`.env.example`** so the browser can call **`http://127.0.0.1:8000`** from the Vite dev server with cookies. For **login/signup**, set **`SUPABASE_URL`**, **`SUPABASE_ANON_KEY`**, **`SUPABASE_SERVICE_ROLE_KEY`**, and **`SUPABASE_JWT_SECRET`** (local: **`supabase start`** — see **[`supabase/README.md`](supabase/README.md)**). Restart **`app`** after editing: **`docker compose up -d --build app`**.
+3. **SPA env** — From the repo root, **`make web-config`** creates **`apps/web/.env.local`** from **`apps/web/.env.example`** if missing (sets **`VITE_API_URL=http://127.0.0.1:8000`**). Run **`cd apps/web && npm install`** once, then **`make web-dev`** or **`npm run dev`** and open the printed URL (typically **`http://127.0.0.1:5173`**).
+
+Use **`127.0.0.1`** consistently for API and UI URLs in dev so CORS and cookie behavior match. Ensure the **MinIO** bucket named like **`S3_BUCKET`** exists if you use real uploads.
 
 For a consolidated command list, see **[Useful commands](#useful-commands)** above.
 

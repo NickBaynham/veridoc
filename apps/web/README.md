@@ -33,9 +33,11 @@ Set **`VITE_API_URL`** to your FastAPI origin (no trailing slash), e.g. `http://
 ```bash
 cd apps/web
 npm install
-cp .env.example .env.local   # optional
+cp .env.example .env.local   # API mode: ensures VITE_API_URL (or: `make web-config` from repo root)
 npm run dev
 ```
+
+From the repository root you can run **`make web-config`** (creates **`.env.local`** if missing) and **`make web-dev`** (runs Vite). Configure **`CORS_ORIGINS`** and **Supabase** in the root **`.env`** when using the Docker API — see the root **README** section *Web UI against the Docker API*.
 
 ## Tests
 

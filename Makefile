@@ -1,4 +1,4 @@
-.PHONY: help setup lock sync install test test-unit test-integration test-e2e test-api lint format clean config resources docker-build docker-up docker-down docker-test docker-run api-local api-local-prod api-local-restart migrate migrate-002 migrate-003 migrate-reset ci-local ci-local-stop ci-local-postgres ci-local-migrate-sql ci-local-migrate
+.PHONY: help setup lock sync install test test-unit test-integration test-e2e test-api lint format clean config resources docker-build docker-up docker-down docker-test docker-run web-config web-dev api-local api-local-prod api-local-restart migrate migrate-002 migrate-003 migrate-reset ci-local ci-local-stop ci-local-postgres ci-local-migrate-sql ci-local-migrate
 
 # Default Python / PDM (override if needed)
 PYTHON ?= python3
@@ -59,6 +59,8 @@ help:
 	@echo "  make docker-down    Stop app stack"
 	@echo "  make docker-test    Run tests in Docker (compose profile: test)"
 	@echo "  make docker-run     One-off app container run"
+	@echo "  make web-config     Create apps/web/.env.local from .env.example if missing (API → Docker :8000)"
+	@echo "  make web-dev        web-config + npm run dev in apps/web (npm install in apps/web once first)"
 	@echo "  make migrate        Apply 001–005 (fails if 001 already applied — use migrate-00x or migrate-reset)"
 	@echo "  make migrate-002    Apply only 002 (when 001 is already on the database)"
 	@echo "  make migrate-003    Apply only 003 (body_text column; when 001+002 already applied)"
@@ -128,6 +130,12 @@ docker-test: config docker-build
 
 docker-run: config docker-build
 	$(DOCKER_COMPOSE) run --rm app
+
+web-config:
+	@test -f apps/web/.env.local || { echo "Creating apps/web/.env.local from apps/web/.env.example"; cp apps/web/.env.example apps/web/.env.local; }
+
+web-dev: web-config
+	cd apps/web && npm run dev
 
 migrate:
 	$(DOCKER_COMPOSE) exec -T $(COMPOSE_POSTGRES_SERVICE) psql -U $(COMPOSE_DB_USER) -d $(COMPOSE_DB_NAME) -v ON_ERROR_STOP=1 < db/migrations/001_initial_schema.up.sql
