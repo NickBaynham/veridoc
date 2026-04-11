@@ -1,4 +1,4 @@
-.PHONY: help setup lock sync install test test-unit test-integration test-e2e test-api lint format clean config resources docker-build docker-up docker-down docker-test docker-run web-config web-dev api-local api-local-prod api-local-restart migrate migrate-002 migrate-003 migrate-reset ci-local ci-local-stop ci-local-postgres ci-local-migrate-sql ci-local-migrate
+.PHONY: help setup lock sync install install-supabase test test-unit test-integration test-e2e test-api lint format clean config resources docker-build docker-up docker-down docker-test docker-run web-config web-dev api-local api-local-prod api-local-restart migrate migrate-002 migrate-003 migrate-reset ci-local ci-local-stop ci-local-postgres ci-local-migrate-sql ci-local-migrate
 
 # Default Python / PDM (override if needed)
 PYTHON ?= python3
@@ -41,6 +41,7 @@ help:
 	@echo "VerifiedSignal — common targets"
 	@echo ""
 	@echo "  make setup       Install PDM (if missing) and project dependencies"
+	@echo "  make install-supabase  Install Supabase CLI (Homebrew when available; see supabase/README.md)"
 	@echo "  make lock        Refresh pdm.lock from pyproject.toml"
 	@echo "  make sync        Install exactly what pdm.lock specifies"
 	@echo "  make install     Alias for sync"
@@ -76,6 +77,24 @@ help:
 setup: config
 	@command -v $(PDM) >/dev/null 2>&1 || { echo "Install PDM: https://pdm-project.org/latest/#installation"; exit 1; }
 	$(PDM) install
+
+# Supabase CLI: local auth stack for /auth/* (Docker must be running for `supabase start`).
+install-supabase:
+	@set -e; \
+	if command -v supabase >/dev/null 2>&1; then \
+		echo "Supabase CLI already installed:"; \
+		supabase --version; \
+	elif command -v brew >/dev/null 2>&1; then \
+		echo "Installing Supabase CLI via Homebrew..."; \
+		brew install supabase/tap/supabase || brew install supabase; \
+		supabase --version; \
+	else \
+		echo >&2 "Homebrew not found. Install the Supabase CLI manually:"; \
+		echo >&2 "  https://supabase.com/docs/guides/cli/getting-started"; \
+		echo >&2 "Windows (Scoop): scoop bucket add supabase https://github.com/supabase/scoop-bucket.git && scoop install supabase"; \
+		echo >&2 "Node 20+: npx supabase --version"; \
+		exit 1; \
+	fi
 
 lock:
 	$(PDM) lock

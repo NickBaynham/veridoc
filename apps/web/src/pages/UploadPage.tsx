@@ -72,8 +72,14 @@ export function UploadPage() {
           if (interval) window.clearInterval(interval);
           interval = undefined;
         }
-      } catch {
-        if (!cancelled) setPipelineLog("Pipeline poll failed (is the API running?)");
+      } catch (e) {
+        if (!cancelled) {
+          const hint =
+            e instanceof ApiError
+              ? `Pipeline poll failed (${e.status}): ${e.message}`
+              : "Pipeline poll failed (network or unexpected error — is the API running?)";
+          setPipelineLog(hint);
+        }
       }
     };
     void tick();

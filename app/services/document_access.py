@@ -24,6 +24,10 @@ def resolve_accessible_collection_ids(
     If no user row exists: when `VERIFIEDSIGNAL_ALLOW_DEFAULT_COLLECTION_FALLBACK` is true and
     `VERIFIEDSIGNAL_DEFAULT_COLLECTION_ID` is set, return that single id (legacy local dev).
     Otherwise return no collections (use with auto-provision or explicit provisioning).
+
+    When a user row exists and fallback is enabled, the default collection id is **unioned** with
+    org collections so intake that targets `VERIFIEDSIGNAL_DEFAULT_COLLECTION_ID` (multipart
+    default) stays visible after auto-provision created a separate personal Inbox UUID.
     """
     user_id = find_user_id_by_auth_sub(session, auth_sub)
 
@@ -45,4 +49,11 @@ def resolve_accessible_collection_ids(
         ),
         {"user_id": user_id},
     ).fetchall()
-    return [r[0] for r in cols]
+    out = [r[0] for r in cols]
+    if (
+        settings.allow_default_collection_fallback
+        and settings.default_collection_id is not None
+        and settings.default_collection_id not in out
+    ):
+        out.append(settings.default_collection_id)
+    return out

@@ -93,6 +93,9 @@ services:
   app:
     build: .
     image: verifiedsignal:local
+    # So SUPABASE_URL can use host.docker.internal to reach `supabase start` on the host (Linux too).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
