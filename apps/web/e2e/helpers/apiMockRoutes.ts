@@ -73,6 +73,33 @@ const detailPayload = {
 export async function installApiMockRoutes(page: Page) {
   const origin = E2E_MOCK_API_ORIGIN;
   let e2eDocDeleted = false;
+  let mockDocCollectionId = COL_ID;
+  type DocListRow = (typeof listPayload.items)[number];
+  let extraDocItems: DocListRow[] = [];
+
+  function primaryDocRow(): DocListRow {
+    return { ...listPayload.items[0], collection_id: mockDocCollectionId };
+  }
+
+  function buildListPayloadObject() {
+    if (e2eDocDeleted) {
+      return { items: [] as DocListRow[], total: 0, user_id: "e2e-sub" };
+    }
+    return {
+      items: [primaryDocRow(), ...extraDocItems],
+      total: 1 + extraDocItems.length,
+      user_id: "e2e-sub",
+    };
+  }
+
+  function buildDetailPayloadObject() {
+    return {
+      ...primaryDocRow(),
+      sources: [],
+      body_text: "Hello from API mock document.",
+      canonical_score: detailPayload.canonical_score,
+    };
+  }
 
   let mockCollections: MockCollectionRow[] = [
     {
@@ -454,7 +481,7 @@ export async function installApiMockRoutes(page: Page) {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify(detailPayload),
+          body: JSON.stringify(buildDetailPayloadObject()),
         });
         return;
       }
@@ -502,11 +529,7 @@ export async function installApiMockRoutes(page: Page) {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify(
-            e2eDocDeleted
-              ? { items: [], total: 0, user_id: "e2e-sub" }
-              : listPayload,
-          ),
+          body: JSON.stringify(buildListPayloadObject()),
         });
         return;
       }
@@ -552,8 +575,10 @@ export async function installApiMockRoutes(page: Page) {
         score: 1,
         snippet: "Hello from API mock document.",
         status: "indexed",
+        collection_id: mockDocCollectionId,
       };
-      let hits = e2eDocDeleted || (col != null && col !== COL_ID) ? [] : [baseHit];
+      let hits =
+        e2eDocDeleted || (col != null && col !== mockDocCollectionId) ? [] : [baseHit];
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -571,6 +596,116 @@ export async function installApiMockRoutes(page: Page) {
               }
             : null,
         }),
+      });
+    },
+  );
+
+  await page.route(
+    (url) => {
+      const b = url.toString().split("?")[0];
+      return b.startsWith(`${origin}/api/v1/documents/`) && b.endsWith("/move");
+    },
+    async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.fallback();
+        return;
+      }
+      if (e2eDocDeleted) {
+        await route.fulfill({
+          status: 404,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Document not found" }),
+        });
+        return;
+      }
+      const b = route.request().url().split("?")[0];
+      const rel = b.slice(`${origin}/api/v1/documents/`.length);
+      const docId = rel.replace(/\/move$/i, "");
+      if (docId !== DOC_ID) {
+        await route.fallback();
+        return;
+      }
+      let body: { collection_id?: string };
+      try {
+        body = route.request().postDataJSON() as { collection_id?: string };
+      } catch {
+        await route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Invalid JSON body" }),
+        });
+        return;
+      }
+      const cid = typeof body.collection_id === "string" ? body.collection_id.trim() : "";
+      if (!cid) {
+        await route.fulfill({
+          status: 422,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "collection_id is required" }),
+        });
+        return;
+      }
+      mockDocCollectionId = cid;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(primaryDocRow()),
+      });
+    },
+  );
+
+  await page.route(
+    (url) => {
+      const b = url.toString().split("?")[0];
+      return b.startsWith(`${origin}/api/v1/documents/`) && b.endsWith("/copy");
+    },
+    async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.fallback();
+        return;
+      }
+      if (e2eDocDeleted) {
+        await route.fulfill({
+          status: 404,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Document not found" }),
+        });
+        return;
+      }
+      const b = route.request().url().split("?")[0];
+      const rel = b.slice(`${origin}/api/v1/documents/`.length);
+      const docId = rel.replace(/\/copy$/i, "");
+      if (docId !== DOC_ID) {
+        await route.fallback();
+        return;
+      }
+      let body: { collection_id?: string };
+      try {
+        body = route.request().postDataJSON() as { collection_id?: string };
+      } catch {
+        await route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Invalid JSON body" }),
+        });
+        return;
+      }
+      const cid = typeof body.collection_id === "string" ? body.collection_id.trim() : "";
+      if (!cid) {
+        await route.fulfill({
+          status: 422,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "collection_id is required" }),
+        });
+        return;
+      }
+      const newId = randomUUID();
+      const row: DocListRow = { ...primaryDocRow(), id: newId, collection_id: cid };
+      extraDocItems = [...extraDocItems, row];
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify(row),
       });
     },
   );

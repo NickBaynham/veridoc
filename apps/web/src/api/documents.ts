@@ -1,6 +1,12 @@
 import { getApiBaseUrl } from "../config";
 import { ApiError, apiFetch, joinApiUrl, readErrorMessage } from "./http";
-import type { DocumentDetail, DocumentListResponse, IntakeResponse, UrlIntakeResponse } from "./types";
+import type {
+  DocumentDetail,
+  DocumentListResponse,
+  DocumentSummary,
+  IntakeResponse,
+  UrlIntakeResponse,
+} from "./types";
 
 export async function listDocuments(
   accessToken: string,
@@ -63,6 +69,38 @@ export async function ingestDocumentFromUrl(
     throw new ApiError(await readErrorMessage(res), res.status);
   }
   return (await res.json()) as UrlIntakeResponse;
+}
+
+export async function moveDocument(
+  accessToken: string,
+  documentId: string,
+  collectionId: string,
+): Promise<DocumentSummary> {
+  const res = await apiFetch(`/api/v1/documents/${encodeURIComponent(documentId)}/move`, {
+    method: "POST",
+    accessToken,
+    jsonBody: { collection_id: collectionId },
+  });
+  if (!res.ok) {
+    throw new ApiError(await readErrorMessage(res), res.status);
+  }
+  return (await res.json()) as DocumentSummary;
+}
+
+export async function copyDocument(
+  accessToken: string,
+  documentId: string,
+  collectionId: string,
+): Promise<DocumentSummary> {
+  const res = await apiFetch(`/api/v1/documents/${encodeURIComponent(documentId)}/copy`, {
+    method: "POST",
+    accessToken,
+    jsonBody: { collection_id: collectionId },
+  });
+  if (!res.ok) {
+    throw new ApiError(await readErrorMessage(res), res.status);
+  }
+  return (await res.json()) as DocumentSummary;
 }
 
 export async function deleteDocument(accessToken: string, documentId: string): Promise<void> {

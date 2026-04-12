@@ -119,3 +119,9 @@ class DocumentListResponse(BaseModel):
     items: list[DocumentSummaryOut]
     total: int
     user_id: str
+
+
+class DocumentCollectionTargetIn(BaseModel):
+    """Target collection for move/copy; must be in the caller's accessible set."""
+
+    collection_id: uuid.UUID

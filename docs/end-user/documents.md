@@ -113,6 +113,25 @@ See also [Getting started](getting-started.md).
 
 **404** means the id does not exist **or** you do not have access.
 
+## Move or copy between collections
+
+You can change which collection owns a document (**move**) or duplicate it into another collection (**copy**) when you can access **both** the document’s current collection and the **target** collection (same org-based rules as listing documents).
+
+| Method | Path | Body (JSON) | Success |
+|--------|------|-------------|---------|
+| **POST** | `/api/v1/documents/{document_id}/move` | **`collection_id`** (UUID) — destination collection | **200** — updated document summary (same **`document_id`**) |
+| **POST** | `/api/v1/documents/{document_id}/copy` | **`collection_id`** (UUID) — destination collection | **201** — summary for the **new** document row |
+
+**Move** updates **`documents.collection_id`** and refreshes the search index for that document. **Copy** inserts a new **`documents`** row (new id), duplicates **`document_sources`** and **`document_scores`**, and reuses **`storage_key`** / **`extract_artifact_key`** when present so bytes are not duplicated. **Deleting** a document removes object-storage files only when **no other** document row still references the same key.
+
+**Errors:**
+
+- **400** — move requested but the document is **already** in the target collection
+- **403** — you may read the document, but the target **`collection_id`** is not in your accessible set
+- **404** — document not found or not visible (**same** as **`GET /documents/{id}`**)
+
+The **VerifiedSignal web** document reader (**API mode**) includes a **Move here** / **Copy here** control when collections load successfully.
+
 ## Downloading the original file
 
 **`GET /api/v1/documents/{document_id}/file`**
@@ -142,7 +161,7 @@ Returns the raw object stored at **`storage_key`** (same collection access rules
 **Success:** **204 No Content**  
 **404** if missing or not accessible.
 
-The API removes the canonical database row (and related metadata) and **attempts** to delete the raw file from object storage.
+The API removes the canonical database row (and related metadata) and **attempts** to delete the raw (and extract-artifact) objects from storage **only when no other document row** still references the same key (so copies that share storage remain valid until every copy is removed).
 
 ## Understanding document status
 

@@ -351,21 +351,47 @@ def delete_document_for_user(
     if doc is None or doc.collection_id not in allowed:
         return False
 
-    key = doc.storage_key
-    if key:
-        try:
-            storage.delete_object(key)
-        except Exception as e:
-            log.warning(
-                "document_delete_storage_failed document_id=%s key=%s err=%s",
-                document_id,
-                key,
-                e,
-            )
+    storage_key = doc.storage_key
+    artifact_key = doc.extract_artifact_key
+    raw_refs = (
+        doc_repo.count_documents_with_storage_key(session, storage_key) if storage_key else 0
+    )
+    extract_refs = (
+        doc_repo.count_documents_with_extract_artifact_key(session, artifact_key)
+        if artifact_key
+        else 0
+    )
 
     delete_document_from_index_sync(document_id, settings=settings)
 
     if not doc_repo.delete_document_row(session, document_id):
         return False
     session.commit()
+
+    if storage_key and raw_refs == 1:
+        try:
+            storage.delete_object(storage_key)
+        except Exception as e:
+            log.warning(
+                "document_delete_storage_failed document_id=%s key=%s err=%s",
+                document_id,
+                storage_key,
+                e,
+            )
+
+    if (
+        artifact_key
+        and extract_refs == 1
+        and artifact_key != storage_key
+    ):
+        try:
+            storage.delete_object(artifact_key)
+        except Exception as e:
+            log.warning(
+                "document_delete_extract_artifact_failed document_id=%s key=%s err=%s",
+                document_id,
+                artifact_key,
+                e,
+            )
+
     return True

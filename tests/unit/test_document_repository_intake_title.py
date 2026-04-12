@@ -6,7 +6,6 @@ import uuid
 from unittest.mock import MagicMock
 
 import pytest
-
 from app.repositories.document_repository import create_intake_row_created
 
 

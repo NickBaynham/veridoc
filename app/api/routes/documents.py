@@ -28,6 +28,7 @@ from app.db.models import DocumentScore
 from app.rate_limit import limiter
 from app.schemas.document import (
     CanonicalScoreOut,
+    DocumentCollectionTargetIn,
     DocumentDetailOut,
     DocumentListResponse,
     DocumentSourceOut,
@@ -44,7 +45,15 @@ from app.services.document_service import (
     run_file_intake,
     run_url_intake_submit,
 )
-from app.services.exceptions import IntakeValidationError, StorageUploadError
+from app.services.document_transfer_service import (
+    copy_document_for_user,
+    move_document_for_user,
+)
+from app.services.exceptions import (
+    IntakeValidationError,
+    StorageUploadError,
+    TargetCollectionAccessError,
+)
 from app.services.pipeline_status_service import get_document_pipeline_for_user
 from app.services.storage_service import ObjectStorage
 from app.services.user_metadata import parse_metadata_json_string, validate_user_metadata
@@ -110,6 +119,56 @@ def get_document_pipeline(
     if out is None:
         raise HTTPException(status_code=404, detail="Document not found")
     return out
+
+
+@router.post("/{document_id}/move", response_model=DocumentSummaryOut)
+def move_document_to_collection(
+    document_id: uuid.UUID,
+    body: DocumentCollectionTargetIn,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user),
+) -> DocumentSummaryOut:
+    """Set the document's collection when both collections are visible to the caller."""
+    try:
+        doc = move_document_for_user(
+            db,
+            user_id,
+            document_id=document_id,
+            target_collection_id=body.collection_id,
+        )
+    except IntakeValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except TargetCollectionAccessError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return DocumentSummaryOut.model_validate(doc)
+
+
+@router.post("/{document_id}/copy", response_model=DocumentSummaryOut, status_code=201)
+def copy_document_to_collection(
+    document_id: uuid.UUID,
+    body: DocumentCollectionTargetIn,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user),
+) -> DocumentSummaryOut:
+    """
+    Duplicate the document row (and sources + scores) into another collection.
+
+    Raw and extract object keys are reused until all rows referencing them are deleted.
+    """
+    try:
+        doc = copy_document_for_user(
+            db,
+            user_id,
+            document_id=document_id,
+            target_collection_id=body.collection_id,
+        )
+    except TargetCollectionAccessError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return DocumentSummaryOut.model_validate(doc)
 
 
 def _content_disposition_attachment(filename: str) -> str:

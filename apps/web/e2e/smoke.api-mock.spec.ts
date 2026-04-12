@@ -93,6 +93,17 @@ test.describe("API mode (mocked HTTP)", () => {
     await expect(page.getByRole("heading", { name: "E2E Policy Brief" })).toBeVisible();
   });
 
+  test("document reader move to other collection (mock API)", async ({ page }) => {
+    await mockPasswordLogin(page);
+    await page.goto(`/documents/${DOC_ID}`);
+    await expect(page.getByRole("heading", { name: "E2E Policy Brief" })).toBeVisible();
+    await page.getByLabel("Target collection").selectOption("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    await page.getByRole("button", { name: "Move here" }).click();
+    await expect(page.getByText(/Current collection:/)).toContainText("Other collection", {
+      timeout: 15_000,
+    });
+  });
+
   test("document reader shows canonical score dimensions", async ({ page }) => {
     await mockPasswordLogin(page);
     await page.goto(`/documents/${DOC_ID}`);

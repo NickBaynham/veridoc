@@ -29,3 +29,10 @@ class CollectionOrgAccessError(Exception):
 
     def __init__(self, message: str = "Not allowed to create collections here") -> None:
         super().__init__(message)
+
+
+class TargetCollectionAccessError(Exception):
+    """Caller cannot move or copy into the target collection."""
+
+    def __init__(self, message: str = "Target collection is not accessible") -> None:
+        super().__init__(message)

@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { deleteDocument, downloadOriginalFile, getDocument } from "../api/documents";
-import type { DocumentDetail } from "../api/types";
+import { listCollections } from "../api/collections";
+import { copyDocument, deleteDocument, downloadOriginalFile, getDocument, moveDocument } from "../api/documents";
+import type { CollectionRow, DocumentDetail } from "../api/types";
 import { ApiError } from "../api/http";
 import { useAuth } from "../context/AuthContext";
 import { useDemoData } from "../context/DemoDataContext";
@@ -47,6 +48,10 @@ export function DocumentReaderPage() {
   const [apiLoading, setApiLoading] = useState(false);
   const [apiDeleteBusy, setApiDeleteBusy] = useState(false);
   const [apiDownloadBusy, setApiDownloadBusy] = useState(false);
+  const [collections, setCollections] = useState<CollectionRow[]>([]);
+  const [targetCollectionId, setTargetCollectionId] = useState("");
+  const [transferBusy, setTransferBusy] = useState(false);
+  const [transferNote, setTransferNote] = useState<string | null>(null);
 
   const [panelTab, setPanelTab] = useState<"scores" | "keywords">("scores");
   const [focusMode, setFocusMode] = useState(false);
@@ -54,6 +59,38 @@ export function DocumentReaderPage() {
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
 
   const doc = id ? resolveDemoDocument(id, deletedDocumentIds) : undefined;
+
+  useEffect(() => {
+    setTransferNote(null);
+  }, [id]);
+
+  useEffect(() => {
+    if (!api || !accessToken) {
+      setCollections([]);
+      return;
+    }
+    let cancelled = false;
+    void listCollections(accessToken).then(
+      (r) => {
+        if (!cancelled) setCollections(r.collections);
+      },
+      () => {
+        if (!cancelled) setCollections([]);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [api, accessToken]);
+
+  useEffect(() => {
+    if (!apiDoc || collections.length === 0) return;
+    const preferred = collections.find((c) => c.id !== apiDoc.collection_id);
+    setTargetCollectionId((prev) => {
+      if (prev && collections.some((c) => c.id === prev)) return prev;
+      return preferred?.id ?? collections[0]?.id ?? "";
+    });
+  }, [apiDoc?.collection_id, collections]);
 
   useEffect(() => {
     if (!api || !accessToken || !id) {
@@ -114,6 +151,39 @@ export function DocumentReaderPage() {
       window.alert(e instanceof ApiError ? e.message : "Download failed");
     } finally {
       setApiDownloadBusy(false);
+    }
+  }
+
+  async function handleMoveToCollection() {
+    if (!api || !accessToken || !id || !apiDoc || !targetCollectionId) return;
+    if (targetCollectionId === apiDoc.collection_id) return;
+    setTransferBusy(true);
+    setTransferNote(null);
+    try {
+      await moveDocument(accessToken, id, targetCollectionId);
+      const d = await getDocument(accessToken, id);
+      setApiDoc(d);
+      setTransferNote("Document moved.");
+    } catch (e) {
+      window.alert(e instanceof ApiError ? e.message : "Move failed");
+    } finally {
+      setTransferBusy(false);
+    }
+  }
+
+  async function handleCopyToCollection() {
+    if (!api || !accessToken || !id || !apiDoc || !targetCollectionId) return;
+    setTransferBusy(true);
+    setTransferNote(null);
+    try {
+      const row = await copyDocument(accessToken, id, targetCollectionId);
+      setTransferNote(
+        `Copy created in the selected collection. Open it from the library (document id ${row.id}).`,
+      );
+    } catch (e) {
+      window.alert(e instanceof ApiError ? e.message : "Copy failed");
+    } finally {
+      setTransferBusy(false);
     }
   }
 
@@ -188,6 +258,55 @@ export function DocumentReaderPage() {
             {apiDeleteBusy ? "Removing…" : "Delete document"}
           </button>
         </div>
+        {collections.length > 0 ? (
+          <div className="card" style={{ marginBottom: "1rem", maxWidth: 520 }}>
+            <h2 style={{ marginTop: 0, fontSize: "1rem" }}>Move or copy</h2>
+            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: 0 }}>
+              Current collection:{" "}
+              <strong>
+                {collections.find((c) => c.id === apiDoc.collection_id)?.name ?? apiDoc.collection_id}
+              </strong>
+            </p>
+            <label htmlFor="vs-target-collection" style={{ display: "block", marginBottom: 6, fontSize: "0.9rem" }}>
+              Target collection
+            </label>
+            <select
+              id="vs-target-collection"
+              style={{
+                width: "100%",
+                marginBottom: "0.65rem",
+                padding: "0.45rem 0.5rem",
+                borderRadius: 6,
+                border: "1px solid var(--border)",
+              }}
+              value={targetCollectionId}
+              disabled={transferBusy}
+              onChange={(e) => setTargetCollectionId(e.target.value)}
+            >
+              {collections.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={transferBusy || targetCollectionId === apiDoc.collection_id}
+                onClick={() => void handleMoveToCollection()}
+              >
+                {transferBusy ? "…" : "Move here"}
+              </button>
+              <button type="button" className="btn" disabled={transferBusy} onClick={() => void handleCopyToCollection()}>
+                {transferBusy ? "…" : "Copy here"}
+              </button>
+            </div>
+            {transferNote ? (
+              <p style={{ fontSize: "0.85rem", marginBottom: 0, marginTop: "0.65rem" }}>{transferNote}</p>
+            ) : null}
+          </div>
+        ) : null}
         <h1 className="page-title">{apiDoc.title || apiDoc.original_filename || apiDoc.id}</h1>
         <p className="page-sub">
           <strong>API document</strong> — Status <code>{apiDoc.status}</code>

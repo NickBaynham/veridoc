@@ -184,3 +184,17 @@ def delete_document_row(session: Session, document_id: uuid.UUID) -> bool:
         return False
     session.delete(doc)
     return True
+
+
+def count_documents_with_storage_key(session: Session, storage_key: str) -> int:
+    stmt = select(func.count()).select_from(Document).where(Document.storage_key == storage_key)
+    return int(session.scalar(stmt) or 0)
+
+
+def count_documents_with_extract_artifact_key(session: Session, extract_artifact_key: str) -> int:
+    stmt = (
+        select(func.count())
+        .select_from(Document)
+        .where(Document.extract_artifact_key == extract_artifact_key)
+    )
+    return int(session.scalar(stmt) or 0)
