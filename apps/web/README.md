@@ -24,7 +24,7 @@ Set **`VITE_API_URL`** to your FastAPI origin (no trailing slash), e.g. `http://
 | Document reader | `GET /api/v1/documents/{id}`, `GET /api/v1/documents/{id}/file?redirect=false` (download original), `DELETE /api/v1/documents/{id}` (`canonical_score` when present — heuristic and/or HTTP scorer; see `docs/scoring-http.md`) |
 | Upload | `POST /api/v1/documents` (multipart), `POST /api/v1/documents/from-url`, poll `GET /api/v1/documents/{id}/pipeline` — see **Local folder (below)** |
 | Search | `GET /api/v1/search` with optional `collection_id`, `content_type`, `status`, `ingest_source`, repeated `tags`, `include_facets` (Bearer required by default on the API). Demo mode mirrors these filters on mock hits and shows a static facet table when enabled. |
-| Collections | `GET /api/v1/collections`, `GET /api/v1/collections/{id}/analytics` |
+| Collections | `GET /api/v1/collections`, `POST /api/v1/collections`, `PATCH /api/v1/collections/{id}`, `DELETE /api/v1/collections/{id}`, `GET /api/v1/collections/{id}/analytics` — **Collections** page wires list + create + rename + delete (demo: `sessionStorage` key `verifiedsignal_demo_collections_v1`) |
 
 **Still mock / placeholder:** Reports, Billing, Security pages; demo-style histogram/trend **charts** on the analytics page (API mode adds real facet tables + Postgres KPIs). Search “mode” toggles (keyword / semantic / hybrid) are UI-only until the API supports them.
 

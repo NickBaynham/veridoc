@@ -56,6 +56,31 @@ test.describe("API mode (mocked HTTP)", () => {
     await expect(page.getByText(/OpenSearch facet buckets/i)).toBeVisible();
   });
 
+  test("collections page create rename delete (mock API)", async ({ page }) => {
+    const created = "E2E CRUD Collection";
+    const renamed = "E2E CRUD Collection Renamed";
+
+    await mockPasswordLogin(page);
+    await page.getByRole("navigation").getByRole("link", { name: "Collections" }).click();
+    await expect(page.getByRole("cell", { name: "E2E Inbox", exact: true })).toBeVisible();
+
+    await page.getByLabel("New collection name").fill(created);
+    await page.getByRole("button", { name: "Create" }).click();
+    await expect(page.getByRole("cell", { name: created, exact: true })).toBeVisible({ timeout: 15_000 });
+
+    await page.getByRole("row", { name: new RegExp(created) }).getByRole("button", { name: "Rename" }).click();
+    await page.getByLabel(`Rename ${created}`).fill(renamed);
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("cell", { name: renamed, exact: true })).toBeVisible({ timeout: 15_000 });
+
+    page.once("dialog", (d) => {
+      expect(d.message()).toContain(renamed);
+      d.accept();
+    });
+    await page.getByRole("row", { name: new RegExp(renamed) }).getByRole("button", { name: "Delete" }).click();
+    await expect(page.getByRole("cell", { name: renamed, exact: true })).not.toBeVisible({ timeout: 15_000 });
+  });
+
   test("unknown document id shows not found", async ({ page }) => {
     await mockPasswordLogin(page);
     await page.goto(`/documents/${COL_ID}`);

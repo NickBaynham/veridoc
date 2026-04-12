@@ -41,6 +41,33 @@ Use this if your app wants a dedicated “prepare workspace” step right after 
 
 Use a collection’s **`id`** as **`collection_id`** when uploading files or submitting URLs (see [Documents](documents.md)).
 
+## Manage collections (create, rename, delete)
+
+You can add collections, change their display **name**, and remove collections you are allowed to manage. The server stores a URL-style **`slug`** per organization (derived from the name, unique within that org). Renaming updates **`name`** and recomputes **`slug`**.
+
+### Web app
+
+On the **Collections** page (`/collections` in **`apps/web`**):
+
+- **New collection** — enter a name and choose **Create** (API mode calls the backend; demo mode keeps rows in **`sessionStorage`** under **`verifiedsignal_demo_collections_v1`**).
+- **Rename** — opens an inline editor; **Save** commits the new name (demo: updates slug locally).
+- **Delete** — asks for confirmation, then removes the collection. **In API mode, documents in that collection are removed** (database cascade); treat this as irreversible.
+
+### HTTP API (Bearer required)
+
+| Method | Path | Body (JSON) | Success |
+|--------|------|-------------|---------|
+| **POST** | `/api/v1/collections` | **`name`** (string, required). Optional **`organization_id`** (UUID) — must be an organization you belong to; if omitted, the API picks a permitted workspace org (same rules as other collection APIs). | **201** — created collection (includes **`id`**, **`slug`**, **`document_count`** starting at **0**). |
+| **PATCH** | `/api/v1/collections/{collection_id}` | **`name`** (string, required, non-blank). | **200** — updated collection ( **`document_count`** reflects current rows). |
+| **DELETE** | `/api/v1/collections/{collection_id}` | — | **204** — empty body. |
+
+Typical errors:
+
+- **400** — invalid or empty name, or other validation failures.
+- **403** — you cannot create a collection in the given **`organization_id`** (not a member).
+- **404** — collection missing or not accessible to your account (same shape as other protected routes).
+- **409** — rare **`slug`** collision after rename/create (retry with a slightly different name).
+
 ## Collection analytics
 
 **`GET /api/v1/collections/{collection_id}/analytics`** (Bearer required, same access rules as the collection) returns **index facets** (ingest source, status, content type, tags) and **Postgres rollups** over canonical document scores. See [Search and live updates — Collection analytics](search-and-events.md#collection-analytics).

@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class CollectionOut(BaseModel):
@@ -21,6 +21,34 @@ class CollectionOut(BaseModel):
 
 class CollectionListResponse(BaseModel):
     collections: list[CollectionOut]
+
+
+class CollectionCreateIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=500)
+    organization_id: uuid.UUID | None = Field(
+        default=None,
+        description=(
+            "Organization to create the collection in; omit for your primary workspace org"
+        ),
+    )
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("name must not be empty")
+        return v
+
+
+class CollectionUpdateIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=500)
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("name must not be empty")
+        return v
 
 
 class FacetBucketOut(BaseModel):

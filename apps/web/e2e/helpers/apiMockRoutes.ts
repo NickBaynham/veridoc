@@ -5,6 +5,35 @@ import { E2E_MOCK_API_ORIGIN } from "../../playwright.api-mock.config";
 const DOC_ID = "11111111-1111-4111-8111-111111111111";
 const COL_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
+type MockCollectionRow = {
+  id: string;
+  organization_id: string;
+  name: string;
+  slug: string;
+  document_count: number;
+  created_at: string;
+};
+
+function slugBaseFromName(name: string): string {
+  const base = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return (base || "collection").slice(0, 80);
+}
+
+function nextUniqueSlug(name: string, taken: Set<string>): string {
+  let base = slugBaseFromName(name);
+  let candidate = base;
+  let n = 0;
+  while (taken.has(candidate)) {
+    n += 1;
+    candidate = `${base}-${n}`;
+  }
+  return candidate;
+}
+
 /** JSON detail for list + get document (matches FastAPI shapes). */
 const listPayload = {
   items: [
@@ -44,6 +73,25 @@ const detailPayload = {
 export async function installApiMockRoutes(page: Page) {
   const origin = E2E_MOCK_API_ORIGIN;
   let e2eDocDeleted = false;
+
+  let mockCollections: MockCollectionRow[] = [
+    {
+      id: COL_ID,
+      organization_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      name: "E2E Inbox",
+      slug: "inbox",
+      document_count: 2,
+      created_at: "2026-01-01T00:00:00Z",
+    },
+    {
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      organization_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      name: "Other collection",
+      slug: "other",
+      document_count: 0,
+      created_at: "2026-01-01T00:00:00Z",
+    },
+  ];
 
   /** Any UUID document DELETE (folder sync removes / replaces paths). */
   await page.route(
@@ -86,11 +134,14 @@ export async function installApiMockRoutes(page: Page) {
       return u.startsWith(`${origin}/api/v1/collections/`) && u.endsWith("/analytics");
     },
     async (route) => {
+      const base = route.request().url().split("?")[0];
+      const collectionId =
+        base.replace(/\/analytics$/i, "").split("/").pop() ?? COL_ID;
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          collection_id: COL_ID,
+          collection_id: collectionId,
           index_total: 1,
           index_status: "fake",
           index_message: null,
@@ -198,32 +249,154 @@ export async function installApiMockRoutes(page: Page) {
     });
   });
 
-  await page.route(`${origin}/api/v1/collections`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        collections: [
-          {
-            id: COL_ID,
-            organization_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-            name: "E2E Inbox",
-            slug: "inbox",
-            document_count: 2,
-            created_at: "2026-01-01T00:00:00Z",
-          },
-          {
-            id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-            organization_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-            name: "Other collection",
-            slug: "other",
-            document_count: 0,
-            created_at: "2026-01-01T00:00:00Z",
-          },
-        ],
-      }),
-    });
-  });
+  await page.route(
+    (url) => url.toString().split("?")[0] === `${origin}/api/v1/collections`,
+    async (route) => {
+      const method = route.request().method();
+      if (method === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ collections: mockCollections }),
+        });
+        return;
+      }
+      if (method === "POST") {
+        let body: { name?: string; organization_id?: string | null };
+        try {
+          body = route.request().postDataJSON() as {
+            name?: string;
+            organization_id?: string | null;
+          };
+        } catch {
+          await route.fulfill({
+            status: 400,
+            contentType: "application/json",
+            body: JSON.stringify({ detail: "Invalid JSON body" }),
+          });
+          return;
+        }
+        const name = typeof body?.name === "string" ? body.name.trim() : "";
+        if (!name) {
+          await route.fulfill({
+            status: 400,
+            contentType: "application/json",
+            body: JSON.stringify({ detail: "Collection name is required" }),
+          });
+          return;
+        }
+        const organization_id =
+          typeof body.organization_id === "string" && body.organization_id
+            ? body.organization_id
+            : (mockCollections[0]?.organization_id ??
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+        const taken = new Set(mockCollections.map((c) => c.slug));
+        const slug = nextUniqueSlug(name, taken);
+        const row: MockCollectionRow = {
+          id: randomUUID(),
+          organization_id,
+          name,
+          slug,
+          document_count: 0,
+          created_at: new Date().toISOString(),
+        };
+        mockCollections = [...mockCollections, row];
+        await route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify(row),
+        });
+        return;
+      }
+      await route.fallback();
+    },
+  );
+
+  await page.route(
+    (url) => {
+      const base = url.toString().split("?")[0];
+      if (!base.startsWith(`${origin}/api/v1/collections/`)) return false;
+      if (base.endsWith("/analytics")) return false;
+      const rest = base.slice(`${origin}/api/v1/collections/`.length);
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        rest,
+      );
+    },
+    async (route) => {
+      const base = route.request().url().split("?")[0];
+      const collectionId = base.slice(`${origin}/api/v1/collections/`.length);
+      const method = route.request().method();
+
+      if (method === "PATCH") {
+        let body: { name?: string };
+        try {
+          body = route.request().postDataJSON() as { name?: string };
+        } catch {
+          await route.fulfill({
+            status: 400,
+            contentType: "application/json",
+            body: JSON.stringify({ detail: "Invalid JSON body" }),
+          });
+          return;
+        }
+        const name = typeof body?.name === "string" ? body.name.trim() : "";
+        if (!name) {
+          await route.fulfill({
+            status: 400,
+            contentType: "application/json",
+            body: JSON.stringify({ detail: "Collection name is required" }),
+          });
+          return;
+        }
+        const idx = mockCollections.findIndex((c) => c.id === collectionId);
+        if (idx === -1) {
+          await route.fulfill({
+            status: 404,
+            contentType: "application/json",
+            body: JSON.stringify({ detail: "Collection not found" }),
+          });
+          return;
+        }
+        const taken = new Set(
+          mockCollections
+            .filter((c) => c.id !== collectionId)
+            .map((c) => c.slug),
+        );
+        const slug = nextUniqueSlug(name, taken);
+        const updated: MockCollectionRow = {
+          ...mockCollections[idx],
+          name,
+          slug,
+        };
+        mockCollections = mockCollections.map((c) =>
+          c.id === collectionId ? updated : c,
+        );
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(updated),
+        });
+        return;
+      }
+
+      if (method === "DELETE") {
+        const exists = mockCollections.some((c) => c.id === collectionId);
+        if (!exists) {
+          await route.fulfill({
+            status: 404,
+            contentType: "application/json",
+            body: JSON.stringify({ detail: "Collection not found" }),
+          });
+          return;
+        }
+        mockCollections = mockCollections.filter((c) => c.id !== collectionId);
+        await route.fulfill({ status: 204, body: "" });
+        return;
+      }
+
+      await route.fallback();
+    },
+  );
 
   await page.route(
     (url) => {

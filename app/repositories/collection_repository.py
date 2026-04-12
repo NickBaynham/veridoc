@@ -10,6 +10,10 @@ from sqlalchemy.orm import Session
 from app.db.models import Collection, Document
 
 
+def get_collection_by_id(session: Session, collection_id: uuid.UUID) -> Collection | None:
+    return session.get(Collection, collection_id)
+
+
 def list_collections_by_ids(session: Session, collection_ids: list[uuid.UUID]) -> list[Collection]:
     if not collection_ids:
         return []
