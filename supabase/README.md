@@ -16,9 +16,9 @@ VerifiedSignal session auth (`/auth/*`) targets **Supabase GoTrue**. For local d
    - **`SERVICE_ROLE_KEY`** → **`SUPABASE_SERVICE_ROLE_KEY`**
    - **`JWT_SECRET`** → **`SUPABASE_JWT_SECRET`**
 
-4. **If FastAPI runs inside Docker** (`docker compose` **`app`** service), **`127.0.0.1:54321` is wrong** from inside the container (it is not your Mac). Set **`SUPABASE_URL=http://host.docker.internal:54321`** instead (same keys as above). **`docker-compose.yml`** adds **`host.docker.internal`** for Linux as well. Restart **`app`** after changing **`.env`**.
+4. Set **`SUPABASE_URL`** to the **`API_URL`** value from step 3 (typically **`http://127.0.0.1:54321`**). The VerifiedSignal API **rewrites loopback hosts to `host.docker.internal` when the process runs inside Docker** (see `effective_supabase_url_for_server` in `app/core/config.py`), so the same **`.env`** works for **`pdm run api`** on the host and for **`docker compose`** **`app`**. **`docker-compose.yml`** adds **`host.docker.internal`** via `extra_hosts` on Linux too. Restart **`app`** after changing **`.env`**.
 
-5. **If FastAPI runs on the host** (`pdm run api` / **`make api-local`**), **`SUPABASE_URL=http://127.0.0.1:54321`** is correct.
+5. You can still set **`SUPABASE_URL=http://host.docker.internal:54321`** explicitly for Compose-only setups; it is unchanged by the rewrite when already using that hostname.
 
 The FastAPI app validates access tokens with **JWKS** (hosted) or **HS256 + `SUPABASE_JWT_SECRET`** (CLI local); it does **not** call Supabase on every protected request.
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from supabase import Client
 
-from app.core.config import get_settings
+from app.core.config import effective_supabase_url_for_server, get_settings
 
 _client: Client | None = None
 
@@ -16,9 +16,10 @@ def get_supabase_service_client() -> Client:
         from supabase import create_client
 
         s = get_settings()
-        if not s.supabase_url.strip() or not s.supabase_service_role_key.strip():
+        base = effective_supabase_url_for_server(s)
+        if not base or not s.supabase_service_role_key.strip():
             raise RuntimeError("Supabase URL and service role key are required")
-        _client = create_client(s.supabase_url.strip(), s.supabase_service_role_key.strip())
+        _client = create_client(base, s.supabase_service_role_key.strip())
     return _client
 
 

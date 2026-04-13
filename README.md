@@ -118,7 +118,7 @@ Whenever you use a non-default Postgres host port, pass the same **`LOCAL_API_PG
 
 ### Alternative: full stack in Docker
 
-To run the **API** and **worker** inside Compose as well, use **`make docker-up`** (builds images; heavier). You still configure **Supabase** for auth (often **`host.docker.internal`** from the **app** container); see **[Web UI against the Docker API](#web-ui-against-the-docker-api)** below.
+To run the **API** and **worker** inside Compose as well, use **`make docker-up`** (builds images; heavier). Configure **Supabase** for auth (local **`SUPABASE_URL=http://127.0.0.1:54321`** is rewritten to **`host.docker.internal`** inside the **`app`** container); see **[Web UI against the Docker API](#web-ui-against-the-docker-api)** below.
 
 ## Testing locally
 
@@ -438,7 +438,7 @@ The **app** service waits for **postgres** and **redis** only (MinIO/OpenSearch 
 The React app lives in `**apps/web**` and is **not** part of Compose. To use **API mode** (real backend instead of mock demo data):
 
 1. **Stack + DB** — `docker compose up -d --build` (or `**make docker-up`**), then apply migrations if needed (`**make migrate**` on a fresh volume, or `**make migrate-002**` … `**migrate-005**` if `**users` already exists**).
-2. **Root `.env`** — After `**make config**`, keep `**CORS_ORIGINS**` and `**AUTH_COOKIE_SECURE**` as in `**.env.example**` so the browser can call `**http://127.0.0.1:8000**` from the Vite dev server with cookies. For **login/signup**, set Supabase vars from `**supabase status --output json**` (see **`supabase/README.md`**). **Important:** when the API runs **in Docker**, use **`SUPABASE_URL=http://host.docker.internal:54321`** — **`http://127.0.0.1:54321`** only works if FastAPI runs on the host. Restart **`app`** after editing: **`docker compose up -d --build app`**.
+2. **Root `.env`** — After `**make config**`, keep `**CORS_ORIGINS**` and `**AUTH_COOKIE_SECURE**` as in `**.env.example**` so the browser can call `**http://127.0.0.1:8000**` from the Vite dev server with cookies. For **login/signup**, set Supabase vars from `**supabase status --output json**` (see **`supabase/README.md`**). Use **`SUPABASE_URL=http://127.0.0.1:54321`** for local GoTrue after **`supabase start`**; the API **rewrites loopback to `host.docker.internal` when it runs inside Docker**, so the same value works for **`pdm run api`** and Compose. Restart **`app`** after editing: **`docker compose up -d --build app`**.
 3. **SPA env** — From the repo root, `**make web-config`** creates `**apps/web/.env.local**` from `**apps/web/.env.example**` if missing (sets `**VITE_API_URL=http://127.0.0.1:8000**`). Run `**cd apps/web && npm install**` once, then `**make web-dev**` or `**npm run dev**` and open the printed URL (typically `**http://127.0.0.1:5173**`).
 
 Use `**127.0.0.1**` consistently for API and UI URLs in dev so CORS and cookie behavior match. Ensure the **MinIO** bucket named like `**S3_BUCKET`** exists if you use real uploads.

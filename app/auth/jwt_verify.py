@@ -10,7 +10,7 @@ from jose import JWTError, jwt
 from jose.jwk import construct
 
 from app.auth.claims import AccessTokenClaims
-from app.core.config import Settings
+from app.core.config import Settings, effective_supabase_url_for_server
 
 _ASYMMETRIC_ALGS = frozenset({"RS256", "RS384", "RS512", "ES256", "ES384", "ES512"})
 
@@ -26,7 +26,7 @@ def _jwks_url_for_settings(settings: Settings) -> str | None:
     explicit = settings.supabase_jwks_url.strip()
     if explicit:
         return explicit
-    base = settings.supabase_url.strip().rstrip("/")
+    base = effective_supabase_url_for_server(settings).rstrip("/")
     if not base:
         return None
     return f"{base}/auth/v1/.well-known/jwks.json"

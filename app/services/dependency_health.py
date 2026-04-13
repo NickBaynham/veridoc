@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import logging
 
-import boto3
 import httpx
-from botocore.config import Config
-from botocore.exceptions import BotoCoreError, ClientError
 
 from app.core.config import Settings, get_settings
+from app.services.exceptions import StorageUploadError
+from app.services.storage_service import get_object_storage
 
 log = logging.getLogger(__name__)
 
@@ -48,28 +47,18 @@ def check_redis_component(settings: Settings | None = None) -> ComponentResult:
 
 
 def check_object_storage_component(settings: Settings | None = None) -> ComponentResult:
-    """HEAD bucket when S3/MinIO is enabled; otherwise stub."""
+    """
+    When S3/MinIO is enabled: ensure the configured bucket exists (create on MinIO-style 404),
+    same as intake — then storage is usable. A bare HeadBucket fails on fresh MinIO (404) and
+    falsely reported 'degraded' even though the endpoint and credentials are fine.
+    """
     s = settings or get_settings()
     if s.use_fake_storage:
         return "stub", None, None
     try:
-        cfg = Config(
-            connect_timeout=2,
-            read_timeout=2,
-            signature_version="s3v4",
-            s3={"addressing_style": "path" if s.s3_use_path_style else "auto"},
-        )
-        client = boto3.client(
-            "s3",
-            endpoint_url=s.s3_endpoint_url or None,
-            aws_access_key_id=s.s3_access_key_id,
-            aws_secret_access_key=s.s3_secret_access_key,
-            region_name=s.s3_region,
-            config=cfg,
-        )
-        client.head_bucket(Bucket=s.s3_bucket)
+        get_object_storage().ensure_bucket()
         return "up", None, None
-    except (ClientError, BotoCoreError) as e:
+    except StorageUploadError as e:
         log.debug("object storage health failed", exc_info=True)
         return "down", type(e).__name__, _truncate(str(e))
     except Exception as e:

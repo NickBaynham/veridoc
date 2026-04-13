@@ -50,9 +50,9 @@ REFRESH_MAX_AGE = 7 * 24 * 3600
 COOKIE_PATH = "/auth"
 
 _SUPABASE_UNREACHABLE_DETAIL = (
-    "Cannot reach Supabase (check SUPABASE_URL). When the API runs on your machine "
-    "(pdm run api / make api-local), use http://127.0.0.1:54321 for local Supabase. "
-    "Docker-only hostnames (e.g. host.docker.internal) only work from inside Compose."
+    "Cannot reach Supabase (check SUPABASE_URL and that `supabase start` is running). "
+    "For local GoTrue use http://127.0.0.1:54321 in .env — the API rewrites that to "
+    "host.docker.internal automatically when it runs inside Docker."
 )
 
 T = TypeVar("T")

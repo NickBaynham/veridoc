@@ -1,5 +1,10 @@
 # Local development stack: PostgreSQL, Redis, MinIO (S3-compatible), OpenSearch + Dashboards, and the app.
 # `docker compose up` starts all services except `test` (profile: test).
+#
+# Compose loads a root `.env` for variable substitution. If that file sets `DATABASE_URL` or `REDIS_URL`
+# to `localhost` (for host-run `make api-local`), those values override the defaults below and break
+# `app` / `worker` *inside* containers. For full-stack Compose, either omit those keys in `.env` or set
+# hosts to `postgres`, `redis`, `minio`, `opensearch` as in the defaults.
 
 services:
   postgres:
@@ -128,17 +133,41 @@ services:
   worker:
     build: .
     image: verifiedsignal:local
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      opensearch:
         condition: service_healthy
     env_file:
       - path: .env
         required: false
     environment:
       PYTHONPATH: /app
+      VERIFIEDSIGNAL_CONFIG_DIR: /app/config
+      # Match `app` so the worker resolves Postgres/MinIO/OpenSearch by Compose DNS (not host .env localhost).
+      DATABASE_URL: ${DATABASE_URL:-postgresql://verifiedsignal:verifiedsignal@postgres:5432/verifiedsignal}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       VERIFIEDSIGNAL_ARQ_QUEUE: ${VERIFIEDSIGNAL_ARQ_QUEUE:-verifiedsignal:jobs}
+      USE_FAKE_QUEUE: ${USE_FAKE_QUEUE:-false}
+      USE_FAKE_EVENT_HUB: ${USE_FAKE_EVENT_HUB:-false}
+      EVENT_PUBSUB_CHANNEL: ${EVENT_PUBSUB_CHANNEL:-verifiedsignal:sse}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-verifiedsignal}
+      OPENSEARCH_URL: ${OPENSEARCH_URL:-http://opensearch:9200}
+      OPENSEARCH_INDEX_NAME: ${OPENSEARCH_INDEX_NAME:-verifiedsignal_documents}
+      USE_FAKE_OPENSEARCH: ${USE_FAKE_OPENSEARCH:-false}
       WORKER_LOG_LEVEL: ${WORKER_LOG_LEVEL:-INFO}
+    volumes:
+      - ./config:/app/config:ro
     command: ["pdm", "run", "worker"]
 
   test:

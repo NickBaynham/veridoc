@@ -320,6 +320,44 @@ def effective_database_url() -> str:
     return get_settings().database_url
 
 
+def running_inside_container() -> bool:
+    """True when this process runs under Docker's Linux runtime (not macOS host binaries)."""
+    return os.path.exists("/.dockerenv")
+
+
+def effective_supabase_url_for_server(settings: Settings | None = None) -> str:
+    """
+    ``SUPABASE_URL`` for outbound HTTP (GoTrue, JWKS) from this API process.
+
+    In Compose, ``http://127.0.0.1:54321`` points at the API container itself, not Supabase on the
+    host. When ``/.dockerenv`` is present, loopback hosts are rewritten to ``host.docker.internal``
+    so one root ``.env`` can use ``127.0.0.1`` for both ``pdm run api`` and ``docker compose``.
+    Hosted ``https://….supabase.co`` URLs are left unchanged.
+    """
+    s = settings or get_settings()
+    raw = (s.supabase_url or "").strip()
+    if not raw or not running_inside_container():
+        return raw
+    try:
+        p = urlparse(raw)
+    except Exception:
+        return raw
+    host = (p.hostname or "").lower()
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        return raw
+    port_suffix = f":{p.port}" if p.port is not None else ""
+    if p.username is not None:
+        auth = p.username
+        if p.password is not None:
+            auth = f"{auth}:{p.password}"
+        new_netloc = f"{auth}@host.docker.internal{port_suffix}"
+    else:
+        new_netloc = f"host.docker.internal{port_suffix}"
+    return urlunparse(
+        (p.scheme or "http", new_netloc, p.path, p.params, p.query, p.fragment)
+    )
+
+
 def preview_database_url(url: str) -> str:
     """Redact password from a Postgres URL for logs / non-production health responses."""
     try:
