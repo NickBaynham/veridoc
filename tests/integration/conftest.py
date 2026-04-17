@@ -18,7 +18,7 @@ def database_url() -> str:
     url = _database_url()
     if not url:
         pytest.skip(
-            "DATABASE_URL not set — integration tests need Postgres with migrations 001–005 "
+            "DATABASE_URL not set — integration tests need Postgres with migrations 001–006 "
             "applied (see db/README.md)."
         )
     return url
@@ -28,7 +28,7 @@ def database_url() -> str:
 def intake_api_client(monkeypatch, database_url: str):
     """
     FastAPI client with real Postgres (DATABASE_URL), fake queue, and in-memory object storage.
-    Use for POST /documents intake tests; requires migrations 001–005 applied.
+    Use for POST /documents intake tests; requires migrations 001–006 applied.
     """
     monkeypatch.setenv("DATABASE_URL", database_url)
     monkeypatch.setenv("USE_FAKE_QUEUE", "true")

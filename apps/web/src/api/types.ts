@@ -103,6 +103,53 @@ export interface CollectionListResponse {
   collections: CollectionRow[];
 }
 
+/** GET /api/v1/collections/{id} — workspace header summary. */
+export interface CollectionDetail {
+  id: string;
+  organization_id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  document_count: number;
+  last_updated: string | null;
+  status_breakdown: Record<string, number>;
+  failed_document_count: number;
+  in_progress_document_count: number;
+  avg_canonical_factuality: number | null;
+  created_at: string;
+}
+
+/** One row in GET /api/v1/collections/{id}/documents. */
+export interface CollectionDocumentItem extends DocumentSummary {
+  canonical_score?: CanonicalScore | null;
+  primary_source_kind?: string | null;
+}
+
+export interface CollectionDocumentsListResponse {
+  items: CollectionDocumentItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  collection_id: string;
+}
+
+export interface CollectionActivityItem {
+  id: string;
+  document_id: string;
+  document_title: string | null;
+  pipeline_run_id: string;
+  event_type: string;
+  stage: string | null;
+  step_index: number;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface CollectionActivityResponse {
+  items: CollectionActivityItem[];
+  collection_id: string;
+}
+
 export interface SearchHit {
   document_id: string;
   title: string | null;
@@ -140,4 +187,110 @@ export interface UrlIntakeResponse {
   source_url: string;
   job_id?: string | null;
   enqueue_error?: string | null;
+}
+
+/** Values match `app.domain.knowledge_model_constants.MODEL_TYPES`. */
+export type KnowledgeModelTypeId =
+  | "summary"
+  | "claims_evidence"
+  | "software_service"
+  | "test_knowledge";
+
+export interface KnowledgeModelVersionSummary {
+  id: string;
+  version_number: number;
+  build_status: string;
+  created_at: string;
+  completed_at?: string | null;
+  asset_count: number;
+  error_message?: string | null;
+}
+
+export interface KnowledgeModelListItem {
+  id: string;
+  collection_id: string;
+  name: string;
+  description: string | null;
+  model_type: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  latest_version: KnowledgeModelVersionSummary | null;
+}
+
+export interface KnowledgeModelListResponse {
+  items: KnowledgeModelListItem[];
+  collection_id: string;
+}
+
+export interface KnowledgeModelVersion {
+  id: string;
+  knowledge_model_id: string;
+  version_number: number;
+  build_status: string;
+  created_at: string;
+  completed_at?: string | null;
+  error_message?: string | null;
+  asset_count: number;
+}
+
+export interface KnowledgeModelDetail {
+  id: string;
+  collection_id: string;
+  name: string;
+  description: string | null;
+  model_type: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  latest_version: KnowledgeModelVersionSummary | null;
+  summary_json: Record<string, unknown> | null;
+}
+
+export interface KnowledgeModelVersionDetail {
+  id: string;
+  knowledge_model_id: string;
+  version_number: number;
+  build_status: string;
+  source_selection_snapshot_json: Record<string, unknown>;
+  build_profile_json: Record<string, unknown>;
+  summary_json: Record<string, unknown> | null;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+  asset_count: number;
+}
+
+export interface KnowledgeModelVersionListResponse {
+  items: KnowledgeModelVersion[];
+  knowledge_model_id: string;
+}
+
+export interface KnowledgeModelAsset {
+  id: string;
+  document_id: string;
+  title: string | null;
+  original_filename: string | null;
+  inclusion_reason: string | null;
+  source_weight: number | null;
+  created_at: string;
+}
+
+export interface KnowledgeModelAssetListResponse {
+  items: KnowledgeModelAsset[];
+  model_version_id: string;
+}
+
+export interface KnowledgeModelCreateBody {
+  name: string;
+  description?: string | null;
+  model_type: KnowledgeModelTypeId;
+  selected_document_ids: string[];
+  build_profile?: Record<string, unknown>;
+}
+
+export interface KnowledgeModelCreateResponse {
+  knowledge_model: KnowledgeModelListItem;
+  version: KnowledgeModelVersion;
+  build_job_id: string | null;
 }

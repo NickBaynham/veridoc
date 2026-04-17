@@ -3,20 +3,34 @@
 from __future__ import annotations
 
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.auth.dependencies import get_current_user
 from app.schemas.collection import (
+    CollectionActivityResponse,
     CollectionAnalyticsOut,
     CollectionCreateIn,
+    CollectionDetailOut,
+    CollectionDocumentsListResponse,
     CollectionListResponse,
     CollectionOut,
     CollectionUpdateIn,
 )
+from app.schemas.knowledge_model import (
+    KnowledgeModelCreateIn,
+    KnowledgeModelCreateResponse,
+    KnowledgeModelListResponse,
+)
 from app.services.collection_analytics_service import get_collection_analytics
+from app.services.collection_detail_service import (
+    get_collection_activity_for_user,
+    get_collection_detail_for_user,
+    list_collection_documents_for_user,
+)
 from app.services.collection_mutation_service import (
     create_collection_for_user,
     delete_collection_for_user,
@@ -24,8 +38,18 @@ from app.services.collection_mutation_service import (
 )
 from app.services.collection_service import list_collections_for_user
 from app.services.exceptions import CollectionAccessError, CollectionOrgAccessError
+from app.services.knowledge_model_service import create_model, list_models_for_collection
 
 router = APIRouter(prefix="/collections", tags=["collections"])
+
+_COLLECTION_DOC_SORT = frozenset({
+    "created_at_desc",
+    "created_at_asc",
+    "name_asc",
+    "name_desc",
+    "factuality_desc",
+    "factuality_asc",
+})
 
 
 @router.get("", response_model=CollectionListResponse)
@@ -87,6 +111,108 @@ def create_collection(
         document_count=0,
         created_at=c.created_at,
     )
+
+
+@router.get("/{collection_id}", response_model=CollectionDetailOut)
+def get_collection_detail(
+    collection_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user),
+) -> CollectionDetailOut:
+    """Workspace summary: counts, last activity timestamp, status breakdown."""
+    out = get_collection_detail_for_user(db, auth_sub=user_id, collection_id=collection_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return out
+
+
+@router.get("/{collection_id}/models", response_model=KnowledgeModelListResponse)
+def list_collection_knowledge_models(
+    collection_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user),
+) -> KnowledgeModelListResponse:
+    """List knowledge models in this collection workspace."""
+    try:
+        return list_models_for_collection(db, auth_sub=user_id, collection_id=collection_id)
+    except PermissionError:
+        raise HTTPException(status_code=404, detail="Collection not found") from None
+
+
+@router.post(
+    "/{collection_id}/models",
+    response_model=KnowledgeModelCreateResponse,
+    status_code=201,
+)
+def create_collection_knowledge_model(
+    collection_id: uuid.UUID,
+    body: KnowledgeModelCreateIn,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user),
+) -> KnowledgeModelCreateResponse:
+    """Create a knowledge model (version 1) from selected documents and enqueue build."""
+    try:
+        return create_model(db, auth_sub=user_id, collection_id=collection_id, body=body)
+    except PermissionError:
+        raise HTTPException(status_code=404, detail="Collection not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get("/{collection_id}/documents", response_model=CollectionDocumentsListResponse)
+def list_collection_documents(
+    collection_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user),
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    status: Annotated[str | None, Query(max_length=64)] = None,
+    q: Annotated[str | None, Query(max_length=512)] = None,
+    source_kind: Annotated[str | None, Query(max_length=32)] = None,
+    sort: Annotated[str, Query(max_length=32)] = "created_at_desc",
+) -> CollectionDocumentsListResponse:
+    """
+    Document directory for a collection: pagination, optional text search on title/filename,
+    filter by pipeline `status`, filter by intake `source_kind`, sort.
+    """
+    if sort not in _COLLECTION_DOC_SORT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"invalid sort; allowed: {sorted(_COLLECTION_DOC_SORT)}",
+        )
+    out = list_collection_documents_for_user(
+        db,
+        auth_sub=user_id,
+        collection_id=collection_id,
+        limit=limit,
+        offset=offset,
+        status=status,
+        q=q,
+        source_kind=source_kind,
+        sort=sort,
+    )
+    if out is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return out
+
+
+@router.get("/{collection_id}/activity", response_model=CollectionActivityResponse)
+def get_collection_activity(
+    collection_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user),
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+) -> CollectionActivityResponse:
+    """Recent pipeline events for documents in this workspace (newest first)."""
+    out = get_collection_activity_for_user(
+        db,
+        auth_sub=user_id,
+        collection_id=collection_id,
+        limit=limit,
+    )
+    if out is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return out
 
 
 @router.get("/{collection_id}/analytics", response_model=CollectionAnalyticsOut)

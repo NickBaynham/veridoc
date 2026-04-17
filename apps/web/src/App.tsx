@@ -3,7 +3,9 @@ import { AppLayout } from "./layouts/AppLayout";
 import { AccountBillingPage } from "./pages/AccountBillingPage";
 import { AccountSecurityPage } from "./pages/AccountSecurityPage";
 import { CollectionAnalyticsPage } from "./pages/CollectionAnalyticsPage";
+import { CollectionDetailPage } from "./pages/CollectionDetailPage";
 import { CollectionsPage } from "./pages/CollectionsPage";
+import { KnowledgeModelDetailPage } from "./pages/KnowledgeModelDetailPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DocumentReaderPage } from "./pages/DocumentReaderPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -24,6 +26,8 @@ export default function App() {
           <Route path="/documents/:id" element={<DocumentReaderPage />} />
           <Route path="/collections" element={<CollectionsPage />} />
           <Route path="/collections/:collectionId/analytics" element={<CollectionAnalyticsPage />} />
+          <Route path="/collections/:collectionId" element={<CollectionDetailPage />} />
+          <Route path="/models/:modelId" element={<KnowledgeModelDetailPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/reports/new" element={<ReportBuilderPage />} />
           <Route path="/account/billing" element={<AccountBillingPage />} />

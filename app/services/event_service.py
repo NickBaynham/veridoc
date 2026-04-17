@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import threading
 from abc import ABC, abstractmethod
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -52,49 +53,48 @@ class InMemoryEventHub(EventHubBackend):
     """Fan-out to SSE clients on a single process (tests / dev without Redis)."""
 
     def __init__(self) -> None:
-        self._subscribers: list[asyncio.Queue[str]] = []
-        self._lock = asyncio.Lock()
+        # (loop, queue): publish may use a different asyncio.run() than the SSE handler.
+        self._subscribers: list[tuple[asyncio.AbstractEventLoop, asyncio.Queue[str]]] = []
+        self._lock = threading.Lock()
 
     async def subscribe(self) -> asyncio.Queue[str]:
         q: asyncio.Queue[str] = asyncio.Queue(maxsize=256)
-        async with self._lock:
-            self._subscribers.append(q)
+        loop = asyncio.get_running_loop()
+        with self._lock:
+            self._subscribers.append((loop, q))
         return q
 
     async def unsubscribe(self, q: asyncio.Queue[str]) -> None:
-        async with self._lock:
-            if q in self._subscribers:
-                self._subscribers.remove(q)
+        with self._lock:
+            self._subscribers = [(lp, qq) for lp, qq in self._subscribers if qq is not q]
 
     async def publish(self, event_type: str, payload: dict[str, Any]) -> None:
         msg = _build_message(event_type, payload)
-        async with self._lock:
+        with self._lock:
             targets = list(self._subscribers)
-        for q in targets:
+
+        def _safe_put(qq: asyncio.Queue[str], data: str) -> None:
             with suppress(asyncio.QueueFull):
-                q.put_nowait(msg)
+                qq.put_nowait(data)
+
+        for loop, q in targets:
+            loop.call_soon_threadsafe(_safe_put, q, msg)
 
 
 class RedisEventHub(EventHubBackend):
     """
     Redis pub/sub so every API replica subscribed to the channel receives publishes.
 
-    One Redis connection + pubsub per active SSE subscriber; a shared publisher client for PUBLISH.
+    One Redis connection + pubsub per active SSE subscriber. Each ``publish`` uses a short-lived
+    async client so callers can safely use ``asyncio.run(hub.publish(...))`` from sync routes
+    (each run gets a new event loop; a cached publisher would be bound to a closed loop).
     """
 
     def __init__(self, redis_url: str, channel: str) -> None:
         self._url = redis_url
         self._channel = channel
-        self._pub: redis_async.Redis | None = None
-        self._pub_lock = asyncio.Lock()
         self._listener_tasks: dict[asyncio.Queue[str], asyncio.Task[None]] = {}
         self._listener_lock = asyncio.Lock()
-
-    async def _get_publisher(self) -> redis_async.Redis:
-        async with self._pub_lock:
-            if self._pub is None:
-                self._pub = redis_async.from_url(self._url, decode_responses=True)
-            return self._pub
 
     async def subscribe(self) -> asyncio.Queue[str]:
         q: asyncio.Queue[str] = asyncio.Queue(maxsize=256)
@@ -141,8 +141,12 @@ class RedisEventHub(EventHubBackend):
 
     async def publish(self, event_type: str, payload: dict[str, Any]) -> None:
         msg = _build_message(event_type, payload)
-        pub = await self._get_publisher()
-        await pub.publish(self._channel, msg)
+        client = redis_async.from_url(self._url, decode_responses=True)
+        try:
+            await client.publish(self._channel, msg)
+        finally:
+            with suppress(Exception):
+                await client.aclose()
 
     async def aclose(self) -> None:
         async with self._listener_lock:
@@ -157,13 +161,6 @@ class RedisEventHub(EventHubBackend):
                 pass
             except Exception:
                 pass
-        async with self._pub_lock:
-            if self._pub is not None:
-                try:
-                    await self._pub.aclose()
-                except Exception:
-                    pass
-                self._pub = None
 
 
 _hub: EventHubBackend | None = None

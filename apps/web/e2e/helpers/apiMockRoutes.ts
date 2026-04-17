@@ -120,6 +120,16 @@ export async function installApiMockRoutes(page: Page) {
     },
   ];
 
+  type KnowledgeModelMockRow = {
+    collection_id: string;
+    listItem: Record<string, unknown>;
+    detail: Record<string, unknown>;
+    versionOut: Record<string, unknown>;
+    versionDetail: Record<string, unknown>;
+    assets: Record<string, unknown>[];
+  };
+  const mockKnowledgeModels = new Map<string, KnowledgeModelMockRow>();
+
   /** Any UUID document DELETE (folder sync removes / replaces paths). */
   await page.route(
     (url) => {
@@ -421,6 +431,37 @@ export async function installApiMockRoutes(page: Page) {
         return;
       }
 
+      if (method === "GET") {
+        const row = mockCollections.find((c) => c.id === collectionId);
+        if (!row) {
+          await route.fulfill({
+            status: 404,
+            contentType: "application/json",
+            body: JSON.stringify({ detail: "Collection not found" }),
+          });
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            id: row.id,
+            organization_id: row.organization_id,
+            name: row.name,
+            slug: row.slug,
+            description: null,
+            document_count: row.document_count,
+            last_updated: row.created_at,
+            status_breakdown: { indexed: row.document_count },
+            failed_document_count: 0,
+            in_progress_document_count: 0,
+            avg_canonical_factuality: 0.72,
+            created_at: row.created_at,
+          }),
+        });
+        return;
+      }
+
       await route.fallback();
     },
   );
@@ -707,6 +748,285 @@ export async function installApiMockRoutes(page: Page) {
         contentType: "application/json",
         body: JSON.stringify(row),
       });
+    },
+  );
+
+  await page.route(
+    (url) => {
+      const b = url.toString().split("?")[0];
+      const prefix = `${origin}/api/v1/collections/`;
+      if (!b.startsWith(prefix) || !b.endsWith("/documents")) return false;
+      const mid = b.slice(prefix.length, -"/documents".length);
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mid);
+    },
+    async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.fallback();
+        return;
+      }
+      const base = route.request().url().split("?")[0];
+      const collectionId = base
+        .slice(`${origin}/api/v1/collections/`.length)
+        .replace(/\/documents$/i, "");
+      const u = new URL(route.request().url());
+      const limit = Math.min(Number(u.searchParams.get("limit")) || 25, 500);
+      const offset = Number(u.searchParams.get("offset")) || 0;
+      const all = buildListPayloadObject().items.filter(
+        (row) => row.collection_id === collectionId,
+      );
+      const slice = all.slice(offset, offset + limit);
+      const items = slice.map((r) => ({
+        ...r,
+        canonical_score: r.id === DOC_ID ? detailPayload.canonical_score : null,
+        primary_source_kind: "upload",
+      }));
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items,
+          total: all.length,
+          limit,
+          offset,
+          collection_id: collectionId,
+        }),
+      });
+    },
+  );
+
+  await page.route(
+    (url) => {
+      const b = url.toString().split("?")[0];
+      const prefix = `${origin}/api/v1/collections/`;
+      if (!b.startsWith(prefix) || !b.endsWith("/models")) return false;
+      const mid = b.slice(prefix.length, -"/models".length);
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mid);
+    },
+    async (route) => {
+      const base = route.request().url().split("?")[0];
+      const collectionId = base
+        .slice(`${origin}/api/v1/collections/`.length)
+        .replace(/\/models$/i, "");
+      const method = route.request().method();
+      if (method === "GET") {
+        const items = [...mockKnowledgeModels.values()]
+          .filter((row) => row.collection_id === collectionId)
+          .map((row) => row.listItem);
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ items, collection_id: collectionId }),
+        });
+        return;
+      }
+      if (method === "POST") {
+        let body: {
+          name?: string;
+          description?: string | null;
+          model_type?: string;
+          selected_document_ids?: string[];
+          build_profile?: Record<string, unknown>;
+        };
+        try {
+          body = route.request().postDataJSON() as typeof body;
+        } catch {
+          await route.fulfill({
+            status: 400,
+            contentType: "application/json",
+            body: JSON.stringify({ detail: "Invalid JSON body" }),
+          });
+          return;
+        }
+        const name = typeof body?.name === "string" ? body.name.trim() : "";
+        const modelType = typeof body?.model_type === "string" ? body.model_type.trim() : "";
+        const docIds = Array.isArray(body?.selected_document_ids)
+          ? body.selected_document_ids.filter((x) => typeof x === "string")
+          : [];
+        const allowed = new Set(
+          buildListPayloadObject()
+            .items.filter((row) => row.collection_id === collectionId)
+            .map((row) => row.id),
+        );
+        if (!name || !modelType || !docIds.length || !docIds.every((id) => allowed.has(id))) {
+          await route.fulfill({
+            status: 400,
+            contentType: "application/json",
+            body: JSON.stringify({
+              detail: "Invalid model create payload or document selection",
+            }),
+          });
+          return;
+        }
+        const modelId = randomUUID();
+        const versionId = randomUUID();
+        const now = new Date().toISOString();
+        const assetCount = docIds.length;
+        const buildProfile =
+          body.build_profile && typeof body.build_profile === "object" ? body.build_profile : {};
+        const versionOut = {
+          id: versionId,
+          knowledge_model_id: modelId,
+          version_number: 1,
+          build_status: "completed",
+          created_at: now,
+          completed_at: now,
+          error_message: null,
+          asset_count: assetCount,
+        };
+        const summaryJson = {
+          mock: true,
+          model_type: modelType,
+          source_document_count: assetCount,
+          message: "E2E mock build output",
+        };
+        const listItem = {
+          id: modelId,
+          collection_id: collectionId,
+          name,
+          description: body.description ?? null,
+          model_type: modelType,
+          status: "active",
+          created_at: now,
+          updated_at: now,
+          latest_version: { ...versionOut },
+        };
+        const detail = {
+          ...listItem,
+          summary_json: summaryJson,
+        };
+        const versionDetail = {
+          ...versionOut,
+          source_selection_snapshot_json: {
+            document_ids: docIds,
+            model_type: modelType,
+          },
+          build_profile_json: buildProfile,
+          summary_json: summaryJson,
+        };
+        const assets = docIds.map((document_id) => ({
+          id: randomUUID(),
+          document_id,
+          title: document_id === DOC_ID ? "E2E Policy Brief" : null,
+          original_filename: document_id === DOC_ID ? "brief.txt" : null,
+          inclusion_reason: "selected_at_creation",
+          source_weight: null,
+          created_at: now,
+        }));
+        mockKnowledgeModels.set(modelId, {
+          collection_id: collectionId,
+          listItem,
+          detail,
+          versionOut,
+          versionDetail,
+          assets,
+        });
+        await route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify({
+            knowledge_model: listItem,
+            version: versionOut,
+            build_job_id: null,
+          }),
+        });
+        return;
+      }
+      await route.fallback();
+    },
+  );
+
+  await page.route(
+    (url) => {
+      const b = url.toString().split("?")[0];
+      if (!b.startsWith(`${origin}/api/v1/models/`)) return false;
+      const rest = b.slice(`${origin}/api/v1/models/`.length);
+      const parts = rest.split("/").filter(Boolean);
+      return parts.length >= 1 && /^[0-9a-f-]{36}$/i.test(parts[0] ?? "");
+    },
+    async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.fallback();
+        return;
+      }
+      const base = route.request().url().split("?")[0];
+      const rest = base.slice(`${origin}/api/v1/models/`.length);
+      const parts = rest.split("/").filter(Boolean);
+      const modelId = parts[0] ?? "";
+      const row = mockKnowledgeModels.get(modelId);
+      if (!row) {
+        await route.fulfill({
+          status: 404,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Model not found" }),
+        });
+        return;
+      }
+      if (parts.length === 1) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(row.detail),
+        });
+        return;
+      }
+      if (parts.length === 2 && parts[1] === "versions") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            items: [row.versionOut],
+            knowledge_model_id: modelId,
+          }),
+        });
+        return;
+      }
+      if (
+        parts.length === 3 &&
+        parts[1] === "versions" &&
+        /^[0-9a-f-]{36}$/i.test(parts[2] ?? "")
+      ) {
+        const vid = parts[2] ?? "";
+        if (vid !== String(row.versionOut.id)) {
+          await route.fulfill({
+            status: 404,
+            contentType: "application/json",
+            body: JSON.stringify({ detail: "Model or version not found" }),
+          });
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(row.versionDetail),
+        });
+        return;
+      }
+      if (
+        parts.length === 4 &&
+        parts[1] === "versions" &&
+        parts[3] === "assets" &&
+        /^[0-9a-f-]{36}$/i.test(parts[2] ?? "")
+      ) {
+        const vid = parts[2] ?? "";
+        if (vid !== String(row.versionOut.id)) {
+          await route.fulfill({
+            status: 404,
+            contentType: "application/json",
+            body: JSON.stringify({ detail: "Model or version not found" }),
+          });
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            items: row.assets,
+            model_version_id: vid,
+          }),
+        });
+        return;
+      }
+      await route.fallback();
     },
   );
 }

@@ -6,10 +6,7 @@ import asyncio
 import uuid
 from typing import Protocol
 
-from arq import create_pool
-from arq.connections import ArqRedis, RedisSettings
-
-from app.core.config import get_settings
+from arq.connections import ArqRedis
 
 
 class JobQueue(Protocol):
@@ -18,6 +15,8 @@ class JobQueue(Protocol):
     async def enqueue_fetch_url_ingest(self, document_id: str) -> str: ...
 
     async def enqueue_score_document(self, document_id: str) -> str: ...
+
+    async def enqueue_build_knowledge_model_version(self, model_version_id: str) -> str: ...
 
 
 class InMemoryJobQueue:
@@ -46,6 +45,12 @@ class InMemoryJobQueue:
             self.jobs.append((job_id, "score_document", document_id))
         return job_id
 
+    async def enqueue_build_knowledge_model_version(self, model_version_id: str) -> str:
+        job_id = str(uuid.uuid4())
+        async with self._lock:
+            self.jobs.append((job_id, "build_knowledge_model_version", model_version_id))
+        return job_id
+
 
 class ArqJobQueue:
     """Enqueue ARQ jobs on Redis."""
@@ -71,10 +76,16 @@ class ArqJobQueue:
             raise RuntimeError("failed to enqueue score_document (duplicate job id?)")
         return job.job_id
 
+    async def enqueue_build_knowledge_model_version(self, model_version_id: str) -> str:
+        job = await self._pool.enqueue_job("build_knowledge_model_version", model_version_id)
+        if job is None:
+            raise RuntimeError(
+                "failed to enqueue build_knowledge_model_version (duplicate job id?)",
+            )
+        return job.job_id
+
 
 _memory_queue: InMemoryJobQueue | None = None
-_arq_pool: ArqRedis | None = None
-_arq_lock = asyncio.Lock()
 
 
 def get_memory_queue() -> InMemoryJobQueue:
@@ -84,25 +95,7 @@ def get_memory_queue() -> InMemoryJobQueue:
     return _memory_queue
 
 
-async def get_job_queue() -> JobQueue:
-    settings = get_settings()
-    if settings.use_fake_queue:
-        return get_memory_queue()
-
-    global _arq_pool
-    async with _arq_lock:
-        if _arq_pool is None:
-            redis_settings = RedisSettings.from_dsn(settings.redis_url)
-            _arq_pool = await create_pool(
-                redis_settings,
-                default_queue_name=settings.arq_queue_name,
-            )
-    return ArqJobQueue(_arq_pool)
-
-
 async def close_job_queue() -> None:
-    global _arq_pool, _memory_queue
-    if _arq_pool is not None:
-        await _arq_pool.close()
-        _arq_pool = None
+    """Reset in-memory test queue. Real ARQ pools are per-enqueue (see queue_service)."""
+    global _memory_queue
     _memory_queue = None

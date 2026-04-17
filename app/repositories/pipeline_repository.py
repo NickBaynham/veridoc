@@ -82,3 +82,21 @@ def list_events_for_run(session: Session, run_id: uuid.UUID) -> list[PipelineEve
         .order_by(PipelineEvent.step_index.asc(), PipelineEvent.created_at.asc())
     ).all()
     return list(rows)
+
+
+def list_recent_events_for_collection(
+    session: Session,
+    collection_id: uuid.UUID,
+    *,
+    limit: int = 100,
+) -> list[tuple[PipelineEvent, PipelineRun, Document]]:
+    """Newest pipeline events for documents in this collection (cross-run feed)."""
+    stmt = (
+        select(PipelineEvent, PipelineRun, Document)
+        .join(PipelineRun, PipelineRun.id == PipelineEvent.pipeline_run_id)
+        .join(Document, Document.id == PipelineRun.document_id)
+        .where(Document.collection_id == collection_id)
+        .order_by(PipelineEvent.created_at.desc())
+        .limit(limit)
+    )
+    return list(session.execute(stmt).all())

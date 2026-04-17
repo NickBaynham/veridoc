@@ -5,7 +5,6 @@ from __future__ import annotations
 import math
 
 import pytest
-
 from app.services.bayes_fusion_score import compute_fused_ai_probability
 
 

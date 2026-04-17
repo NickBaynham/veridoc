@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { listCollections } from "../api/collections";
 import { ingestDocumentFromUrl, uploadDocumentFile } from "../api/documents";
 import type { CollectionRow } from "../api/types";
@@ -56,6 +56,8 @@ function simulateFolderFiles(files: FileList | readonly File[] | null): MockFile
 export function UploadPage() {
   const { accessToken } = useAuth();
   const api = isApiBackend();
+  const [searchParams] = useSearchParams();
+  const collectionFromUrl = searchParams.get("collection");
   const inputRef = useRef<HTMLInputElement>(null);
   const webkitDirInputRef = useRef<HTMLInputElement>(null);
   const dirHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
@@ -97,6 +99,7 @@ export function UploadPage() {
         const cols = r.collections;
         setUploadCollections(cols);
         setUploadCollectionId((prev) => {
+          if (collectionFromUrl && cols.some((c) => c.id === collectionFromUrl)) return collectionFromUrl;
           if (prev && cols.some((c) => c.id === prev)) return prev;
           return cols[0]?.id ?? "";
         });
@@ -113,7 +116,7 @@ export function UploadPage() {
     return () => {
       cancelled = true;
     };
-  }, [api, accessToken]);
+  }, [api, accessToken, collectionFromUrl]);
 
   useEffect(() => {
     if (tab !== "directory") return;

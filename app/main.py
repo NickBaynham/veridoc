@@ -19,6 +19,7 @@ from app.api.routes import (
     events,
     health,
     info,
+    knowledge_models,
     search,
     session_auth,
     users_api,
@@ -130,6 +131,7 @@ def create_app() -> FastAPI:
     application.include_router(info.router, prefix=v1)
     application.include_router(documents.router, prefix=v1)
     application.include_router(collections.router, prefix=v1)
+    application.include_router(knowledge_models.router, prefix=v1)
     application.include_router(users_api.router, prefix=v1)
     application.include_router(search.router, prefix=v1)
     application.include_router(events.router, prefix=v1)

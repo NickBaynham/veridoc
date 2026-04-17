@@ -16,6 +16,8 @@ This directory holds **canonical** schema definitions for VerifiedSignal. The ap
 | `migrations/004_document_extract_artifact.down.sql` | Drops **`extract_artifact_key`**. |
 | `migrations/005_documents_user_metadata.up.sql` | Adds **`documents.user_metadata`** JSONB (client intake metadata; GIN index). |
 | `migrations/005_documents_user_metadata.down.sql` | Drops **`user_metadata`**. |
+| `migrations/006_knowledge_models.up.sql` | **Knowledge models**: `knowledge_models`, `knowledge_model_versions`, `knowledge_model_assets`, `model_build_runs` (versioned, auditable builds from selected collection documents). |
+| `migrations/006_knowledge_models.down.sql` | Rollback (drops knowledge-model tables). |
 
 **Planned (design only):** further metadata layers — **[`docs/document-metadata-design.md`](../docs/document-metadata-design.md)** (`analysis_metadata`, `document_tags`, etc.). **`user_metadata`** is implemented in **005** for intake + search.
 
@@ -27,9 +29,9 @@ From the repo root, with **Docker Compose Postgres** already running (`docker co
 make migrate
 ```
 
-That applies **001** through **005** via `docker compose exec` (same as below).
+That applies **001** through **006** via `docker compose exec` (same as below).
 
-**`relation "users" already exists`:** **001** is already applied. You may only need **002**–**005**:
+**`relation "users" already exists`:** **001** is already applied. You may only need **002**–**006**:
 
 ```bash
 make migrate-002
@@ -39,6 +41,8 @@ make migrate-003
 make migrate-004
 # or, when 001–004 are applied but user_metadata is missing:
 make migrate-005
+# or, when 001–005 are applied but knowledge models are missing:
+make migrate-006
 ```
 
 or the database is fully migrated already and you can ignore the error. To wipe dev data and re-run migrations:
@@ -56,6 +60,7 @@ docker compose exec -T postgres psql -U verifiedsignal -d verifiedsignal -v ON_E
 docker compose exec -T postgres psql -U verifiedsignal -d verifiedsignal -v ON_ERROR_STOP=1 < db/migrations/003_document_body_text.up.sql
 docker compose exec -T postgres psql -U verifiedsignal -d verifiedsignal -v ON_ERROR_STOP=1 < db/migrations/004_document_extract_artifact.up.sql
 docker compose exec -T postgres psql -U verifiedsignal -d verifiedsignal -v ON_ERROR_STOP=1 < db/migrations/005_documents_user_metadata.up.sql
+docker compose exec -T postgres psql -U verifiedsignal -d verifiedsignal -v ON_ERROR_STOP=1 < db/migrations/006_knowledge_models.up.sql
 ```
 
 Or from a host with `psql`:
@@ -66,6 +71,7 @@ psql "postgresql://verifiedsignal:verifiedsignal@localhost:5432/verifiedsignal" 
 psql "postgresql://verifiedsignal:verifiedsignal@localhost:5432/verifiedsignal" -v ON_ERROR_STOP=1 -f db/migrations/003_document_body_text.up.sql
 psql "postgresql://verifiedsignal:verifiedsignal@localhost:5432/verifiedsignal" -v ON_ERROR_STOP=1 -f db/migrations/004_document_extract_artifact.up.sql
 psql "postgresql://verifiedsignal:verifiedsignal@localhost:5432/verifiedsignal" -v ON_ERROR_STOP=1 -f db/migrations/005_documents_user_metadata.up.sql
+psql "postgresql://verifiedsignal:verifiedsignal@localhost:5432/verifiedsignal" -v ON_ERROR_STOP=1 -f db/migrations/006_knowledge_models.up.sql
 ```
 
 Rollback (destructive):

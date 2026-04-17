@@ -240,7 +240,7 @@ export function CollectionsPage() {
                         </button>
                       </span>
                     ) : (
-                      c.name
+                      <Link to={`/collections/${c.id}`}>{c.name}</Link>
                     )}
                   </td>
                   <td>{c.document_count}</td>
@@ -336,7 +336,7 @@ export function CollectionsPage() {
                       </button>
                     </span>
                   ) : (
-                    c.name
+                    <Link to={`/collections/${c.id}`}>{c.name}</Link>
                   )}
                 </td>
                 <td>{c.document_count}</td>

@@ -14,6 +14,15 @@ from worker.pipeline import run_document_pipeline
 log = get_logger("verifiedsignal.worker.tasks")
 
 
+async def build_knowledge_model_version(ctx: dict[str, Any], model_version_id: str) -> str:
+    """Background: materialize summary_json for a knowledge_model_versions row."""
+    from app.services.models.model_build_worker import run_build_knowledge_model_version_sync
+
+    log.info("task_build_knowledge_model_version version_id=%s", model_version_id)
+    await asyncio.to_thread(run_build_knowledge_model_version_sync, model_version_id)
+    return model_version_id
+
+
 async def fetch_url_and_ingest(ctx: dict[str, Any], document_id: str) -> str:
     """Fetch remote URL for a `created` document, upload raw bytes, enqueue `process_document`."""
     log.info("task_fetch_url_and_ingest document_id=%s", document_id)

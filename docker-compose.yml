@@ -1,5 +1,13 @@
-# Local development stack: PostgreSQL, Redis, MinIO (S3-compatible), OpenSearch + Dashboards, and the app.
+# Local development stack: PostgreSQL, Redis, MinIO (S3-compatible), OpenSearch + Dashboards,
+# VerifiedSignal API + worker, optional **scoring-service** (sibling repo), and static **web** UI.
 # `docker compose up` starts all services except `test` (profile: test).
+#
+# **Scoring service:** build context defaults to `../scoring-service` (sibling of this repo). Override with
+# `SCORING_SERVICE_REPO` in `.env`. Set `OPENAI_API_KEY` for real LLM scoring. Use the same secret for
+# `SCORE_HTTP_BEARER_TOKEN` (worker) and scoring-service `VERIFIEDSIGNAL_HTTP_BEARER_TOKEN` (set below).
+#
+# **Web UI:** SPA is built with `VITE_API_URL` pointing at the host-mapped API (default `http://127.0.0.1:8000`).
+# Override with `WEB_VITE_API_URL` when building if `API_PORT` is not 8000.
 #
 # Compose loads a root `.env` for variable substitution. If that file sets `DATABASE_URL` or `REDIS_URL`
 # to `localhost` (for host-run `make api-local`), those values override the defaults below and break
@@ -95,6 +103,57 @@ services:
     ports:
       - "${OPENSEARCH_DASHBOARDS_PORT:-5601}:5601"
 
+  # --- Scoring service (VerifiedSignal HTTP scorer + native async API) ---
+  scoring-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: scoring
+      POSTGRES_PASSWORD: scoring
+      POSTGRES_DB: scoring
+    volumes:
+      - scoring_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scoring -d scoring"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  scoring-service:
+    build:
+      context: ${SCORING_SERVICE_REPO:-../scoring-service}
+      dockerfile: docker/api.Dockerfile
+    image: scoring-service:local
+    depends_on:
+      scoring-postgres:
+        condition: service_healthy
+    environment:
+      APP_ENV: local
+      DATABASE_URL: postgresql+asyncpg://scoring:scoring@scoring-postgres:5432/scoring
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      MODEL_NAME: ${SCORING_MODEL_NAME:-gpt-4o-mini}
+      LOG_LEVEL: ${SCORING_LOG_LEVEL:-INFO}
+      JOB_QUEUE_BACKEND: database
+      VERIFIEDSIGNAL_HTTP_BEARER_TOKEN: ${SCORE_HTTP_BEARER_TOKEN:-changeme-scoring-bearer}
+    ports:
+      - "${SCORING_SERVICE_PORT:-8010}:8000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    command:
+      [
+        "sh",
+        "-c",
+        "pdm run alembic upgrade head && exec pdm run uvicorn app.main:app --host 0.0.0.0 --port 8000",
+      ]
+
   app:
     build: .
     image: verifiedsignal:local
@@ -124,6 +183,7 @@ services:
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       S3_BUCKET: ${S3_BUCKET:-verifiedsignal}
       OPENSEARCH_URL: ${OPENSEARCH_URL:-http://opensearch:9200}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:8000,http://localhost:8000}
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
@@ -143,6 +203,8 @@ services:
       minio:
         condition: service_healthy
       opensearch:
+        condition: service_healthy
+      scoring-service:
         condition: service_healthy
     env_file:
       - path: .env
@@ -166,9 +228,27 @@ services:
       OPENSEARCH_INDEX_NAME: ${OPENSEARCH_INDEX_NAME:-verifiedsignal_documents}
       USE_FAKE_OPENSEARCH: ${USE_FAKE_OPENSEARCH:-false}
       WORKER_LOG_LEVEL: ${WORKER_LOG_LEVEL:-INFO}
+      ENQUEUE_SCORE_AFTER_PIPELINE: ${ENQUEUE_SCORE_AFTER_PIPELINE:-true}
+      SCORE_ASYNC_BACKEND: ${SCORE_ASYNC_BACKEND:-http}
+      SCORE_HTTP_URL: ${SCORE_HTTP_URL:-http://scoring-service:8000/v1/score}
+      SCORE_HTTP_BEARER_TOKEN: ${SCORE_HTTP_BEARER_TOKEN:-changeme-scoring-bearer}
+      SCORE_HTTP_TIMEOUT_S: ${SCORE_HTTP_TIMEOUT_S:-120}
     volumes:
       - ./config:/app/config:ro
     command: ["pdm", "run", "worker"]
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${WEB_VITE_API_URL:-http://127.0.0.1:8000}
+    image: verifiedsignal-web:local
+    depends_on:
+      app:
+        condition: service_started
+    ports:
+      - "${WEB_PORT:-5173}:80"
 
   test:
     build: .
@@ -190,3 +270,4 @@ volumes:
   redis_data:
   minio_data:
   opensearch_data:
+  scoring_postgres_data:

@@ -187,7 +187,11 @@ def apply_bayes_fusion(
     )
 
     h_row = _latest_heuristic_row(session, doc.id)
-    p_h = float(h_row.ai_generation_probability) if h_row and h_row.ai_generation_probability is not None else None
+    p_h = (
+        float(h_row.ai_generation_probability)
+        if h_row and h_row.ai_generation_probability is not None
+        else None
+    )
 
     http_row = _latest_completed_http_row(session, doc.id, fp)
     p_r = float(http_row.ai_generation_probability) if http_row else None
@@ -246,8 +250,16 @@ def apply_bayes_fusion(
     if http_skipped_reason and p_r is None:
         dbg["http_skipped_reason"] = http_skipped_reason
 
-    h_conf = float(h_row.confidence_score) if h_row and h_row.confidence_score is not None else None
-    r_conf = float(http_row.confidence_score) if http_row and http_row.confidence_score is not None else None
+    h_conf = (
+        float(h_row.confidence_score)
+        if h_row and h_row.confidence_score is not None
+        else None
+    )
+    r_conf = (
+        float(http_row.confidence_score)
+        if http_row and http_row.confidence_score is not None
+        else None
+    )
     conf_out = _confidence_fused(h_conf, r_conf)
 
     if settings.bayes_fusion_promote_canonical:
