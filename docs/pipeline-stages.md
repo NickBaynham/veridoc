@@ -7,7 +7,7 @@ The ARQ task **`process_document`** runs **`execute_scaffold_pipeline`** (`app/s
 Defined in **`app/pipeline/constants.py`** as **`DOCUMENT_SCAFFOLD_STAGES`**:
 
 1. **`ingest`** — Verifies the raw object exists in storage (`object_exists` on **`documents.storage_key`**) without downloading the full body. Emits **`ingest_verified`**, **`ingest_skipped`**, or **`ingest_failed`**.
-2. **`extract`** — **`get_bytes`** from storage, then **`extract_document_text`** (`app/services/document_content_extract.py`): **PDF** (`pypdf`), **DOCX** (`python-docx`), or the existing **plain / UTF-8 heuristic** path (`document_text_extract`). Truncated text is stored in **`documents.body_text`**; full extracted UTF-8 text is uploaded to **`artifacts/{document_id}/extracted.txt`** and **`documents.extract_artifact_key`** is set (migration **004**). Events: **`extract_complete`**, **`extract_failed`**, **`extract_skipped`**, **`extract_artifact_failed`** (upload error only).
+2. **`extract`** — **`get_bytes`** from storage, then **`extract_document_text`** (`app/services/document_content_extract.py`): **PDF** (`pypdf`), optional **scanned-PDF OCR** when native text is empty (**`pdf2image`** + **Tesseract**; see **`OCR_*`** env vars), **DOCX** (`python-docx`), **images** (**`image/*`** and common raster suffixes) via **Tesseract** when **`OCR_ENABLED`**, or the **plain / UTF-8 heuristic** path (`document_text_extract`). Truncated text is stored in **`documents.body_text`**; full extracted UTF-8 text is uploaded to **`artifacts/{document_id}/extracted.txt`** and **`documents.extract_artifact_key`** is set (migration **004**). Events: **`extract_complete`**, **`extract_failed`**, **`extract_skipped`**, **`extract_artifact_failed`** (upload error only).
 3. **`enrich`** — Lightweight **text stats** on **`documents.body_text`**: word/character counts and **`has_body_text`** in the **`enrich_complete`** payload (`mode`: **`text_stats`**). Swap in real enrichers (NER, embeddings, etc.) behind the same stage name when ready.
 4. **`score`** — Always writes a **canonical** heuristic row via **`verifiedsignal_heuristic`** (`app/services/heuristic_score.py`): **`factuality_score`** and **`ai_generation_probability`** are deterministic proxies from lexical diversity (not ML). If **`ENQUEUE_SCORE_AFTER_PIPELINE=true`**, also enqueues **`score_document`** on Redis/ARQ. Emits **`score_job_enqueued`**, **`score_skipped`**, or **`score_enqueue_failed`**. The **`score_document`** worker (`app/services/score_document_worker.py`) adds a **second** row: **`SCORE_ASYNC_BACKEND=stub`** → non-canonical **`verifiedsignal_stub`**; **`SCORE_ASYNC_BACKEND=http`** → **`verifiedsignal_http`** via **`POST`** to **`SCORE_HTTP_URL`** (see **[`docs/scoring-http.md`](scoring-http.md)**). Optional **`SCORE_API_PROMOTE_CANONICAL=true`** makes the HTTP row canonical and demotes others. The ARQ task retries transient HTTP failures (**`max_tries=5`**).
 5. **`index`** — Keyword index via **`index_document_sync`** (OpenSearch or fake). Events: **`index_complete`** / **`index_failed`**.
@@ -29,6 +29,9 @@ Defined in **`app/pipeline/constants.py`** as **`DOCUMENT_SCAFFOLD_STAGES`**:
 
 - **`pypdf`** — PDF text extraction.
 - **`python-docx`** — DOCX paragraph text.
+- **`Pillow`** / **`pytesseract`** — raster OCR (images; also used after PDF render).
+- **`pdf2image`** — PDF page rasterization (requires **Poppler** `pdftoppm` on the worker host).
+- **Tesseract** — `tesseract` binary on **`PATH`** (or **`TESSERACT_CMD`**). The app **Dockerfile** installs **`tesseract-ocr`** and **`poppler-utils`**.
 
 ## Migrations
 

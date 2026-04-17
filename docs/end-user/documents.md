@@ -48,6 +48,29 @@ You only see documents in **collections your account can access** (see [Workspac
 - **400** — validation (empty file, missing filename, bad collection id, over size limit, etc.)
 - **502** — object storage failure; response may include **`document_id`** for support
 
+### Text, Markdown, source code, and API specs
+
+The worker decodes **UTF-8 text** into **`body_text`** for search and tooling. Correct **`Content-Type`** values (e.g. **`text/plain`**, **`text/markdown`**, **`text/csv`**) are handled automatically.
+
+If the browser sends **`application/octet-stream`**, extraction also uses the **filename suffix**, including:
+
+- **Markdown / text:** **`.md`**, **`.markdown`**, **`.txt`**, **`.text`**, **`.log`**
+- **CSV / simple markup:** **`.csv`**, **`.html`**, **`.htm`**, **`.xml`**
+- **OpenAPI / config:** **`.json`**, **`.yaml`**, **`.yml`**
+- **JavaScript / TypeScript:** **`.js`**, **`.mjs`**, **`.cjs`**, **`.jsx`**, **`.ts`**, **`.tsx`**
+- **Java / Python:** **`.java`**, **`.py`**, **`.pyw`**, **`.pyi`**
+
+Use normal **`POST /api/v1/documents`** uploads (for example **`README.md`**, **`openapi.json`**, or **`.py`** sources as reference for test generation in another service). **`text/html`** bodies get loose tag stripping for keyword search.
+
+### Images and scanned PDFs (OCR)
+
+When **`OCR_ENABLED`** is true (default in packaged images), the worker runs **Tesseract** on:
+
+- **Images** — MIME **`image/*`** or extensions **`.png`**, **`.jpg`**, **`.jpeg`**, **`.gif`**, **`.webp`**, **`.tif`**, **`.tiff`**, **`.bmp`** (including **`application/octet-stream`** uploads if the filename suffix matches).
+- **Scanned PDFs** — if **`pypdf`** finds **no** extractable text, the worker can rasterize up to **`OCR_MAX_PDF_PAGES`** pages (**Poppler** required) and OCR them when **`OCR_PDF_FALLBACK`** is true.
+
+Quality depends on resolution and language packs; set **`OCR_LANGS`** (e.g. **`eng`**, **`eng+deu`**) and install matching **tessdata** on the worker. **`TESSERACT_CMD`** overrides the binary path. If Tesseract or Poppler is missing, extraction completes without **`body_text`** (same as other unsupported binaries) rather than failing the pipeline.
+
 ## Submitting a document by URL
 
 **`POST /api/v1/documents/from-url`**  

@@ -121,6 +121,32 @@ class Settings(BaseSettings):
 
     max_upload_bytes: int = Field(default=52_428_800, validation_alias="MAX_UPLOAD_BYTES")  # 50 MiB
 
+    # Tesseract OCR for images (image/*) and optional scanned-PDF fallback when pypdf finds no text.
+    ocr_enabled: bool = Field(default=True, validation_alias="OCR_ENABLED")
+    ocr_pdf_fallback: bool = Field(
+        default=True,
+        validation_alias="OCR_PDF_FALLBACK",
+        description=(
+            "When true and OCR_ENABLED, render PDF pages (poppler) and OCR if native text is empty."
+        ),
+    )
+    ocr_max_pdf_pages: int = Field(
+        default=25,
+        ge=1,
+        le=200,
+        validation_alias="OCR_MAX_PDF_PAGES",
+    )
+    ocr_langs: str = Field(
+        default="eng",
+        validation_alias="OCR_LANGS",
+        description="Tesseract language code(s), e.g. eng or eng+deu (install matching tessdata).",
+    )
+    tesseract_cmd: str | None = Field(
+        default=None,
+        validation_alias="TESSERACT_CMD",
+        description="Optional path to tesseract binary; uses PATH when unset.",
+    )
+
     # URL-based document intake (worker fetches remote bytes → same S3 + pipeline as multipart).
     url_ingest_enabled: bool = Field(default=True, validation_alias="URL_INGEST_ENABLED")
     url_fetch_max_bytes: int = Field(
