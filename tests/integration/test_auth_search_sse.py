@@ -19,6 +19,9 @@ def unauth_api_client(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("USE_FAKE_STORAGE", "true")
     monkeypatch.setenv("USE_FAKE_OPENSEARCH", "true")
     monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
+    # CI or a developer .env may set legacy anonymous SSE; plain GET on /events/stream then never ends.
+    monkeypatch.setenv("VERIFIEDSIGNAL_REQUIRE_AUTH_SSE", "true")
+    monkeypatch.setenv("VERIFIEDSIGNAL_REQUIRE_AUTH_SEARCH", "true")
     reset_settings_cache()
 
     def fake_db():
@@ -40,8 +43,9 @@ def test_search_returns_401_without_bearer(unauth_api_client: TestClient) -> Non
 
 @pytest.mark.integration
 def test_sse_stream_returns_401_without_token(unauth_api_client: TestClient) -> None:
-    r = unauth_api_client.get("/api/v1/events/stream")
-    assert r.status_code == 401
+    # Same as authenticated case: never use .get() on SSE — it waits for an unbounded body.
+    with unauth_api_client.stream("GET", "/api/v1/events/stream", timeout=5.0) as r:
+        assert r.status_code == 401
 
 
 @pytest.mark.integration
@@ -78,5 +82,6 @@ def test_sse_accepts_access_token_query(jwt_integration_client) -> None:
     with client.stream(
         "GET",
         f"/api/v1/events/stream?access_token={quote(tok, safe='')}",
+        timeout=5.0,
     ) as r:
         assert r.status_code == 200

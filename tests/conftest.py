@@ -118,6 +118,7 @@ def jwt_integration_client(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("VERIFIEDSIGNAL_AUTO_PROVISION_IDENTITY", "true")
     monkeypatch.setenv("VERIFIEDSIGNAL_ALLOW_DEFAULT_COLLECTION_FALLBACK", "true")
     monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
+    monkeypatch.setenv("VERIFIEDSIGNAL_REQUIRE_AUTH_SSE", "true")
 
     from app.core.config import reset_settings_cache
     from app.db.session import reset_engine
