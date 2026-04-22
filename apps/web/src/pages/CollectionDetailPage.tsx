@@ -587,7 +587,7 @@ export function CollectionDetailPage() {
         aria-label="Collection workspace sections"
         style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: "1rem" }}
       >
-        {COLLECTION_WORKSPACE_TABS.map((t) => (
+        {COLLECTION_WORKSPACE_TABS.map((t: CollectionWorkspaceTab) => (
           <button
             key={t}
             type="button"
@@ -639,7 +639,7 @@ export function CollectionDetailPage() {
                   onChange={(e) => setSort(e.target.value as CollectionDocumentSort)}
                   style={{ padding: "0.45rem 0.5rem", borderRadius: 6, border: "1px solid var(--border)" }}
                 >
-                  {COLLECTION_DOCUMENT_SORTS.map((s) => (
+                  {COLLECTION_DOCUMENT_SORTS.map((s: CollectionDocumentSort) => (
                     <option key={s} value={s}>
                       {sortLabel(s)}
                     </option>

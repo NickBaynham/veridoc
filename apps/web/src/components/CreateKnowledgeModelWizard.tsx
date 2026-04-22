@@ -3,7 +3,10 @@ import { fetchCollectionDocuments } from "../api/collections";
 import { createCollectionKnowledgeModel } from "../api/knowledgeModels";
 import { ApiError } from "../api/http";
 import type { CollectionDocumentItem, KnowledgeModelTypeId } from "../api/types";
-import { KNOWLEDGE_MODEL_TYPE_OPTIONS } from "../lib/knowledgeModelUi";
+import {
+  KNOWLEDGE_MODEL_TYPE_OPTIONS,
+  type KnowledgeModelTypeOption,
+} from "../lib/knowledgeModelUi";
 
 // Backend currently validates list limits at <= 200.
 const DOC_PAGE_SIZE = 200;
@@ -283,7 +286,8 @@ export function CreateKnowledgeModelWizard({
           <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
             <p style={{ marginTop: 0 }}>
               <strong style={{ color: "var(--text)" }}>Type:</strong>{" "}
-              {KNOWLEDGE_MODEL_TYPE_OPTIONS.find((o) => o.id === modelType)?.label ?? modelType}
+              {KNOWLEDGE_MODEL_TYPE_OPTIONS.find((o: KnowledgeModelTypeOption) => o.id === modelType)
+                ?.label ?? modelType}
             </p>
             <p>
               <strong style={{ color: "var(--text)" }}>Name:</strong> {name.trim()}

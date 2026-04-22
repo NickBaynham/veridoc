@@ -14,7 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Python packaging artifact (root only — do not use bare `lib/` or it ignores apps/web/src/lib)
+/lib/
 lib64/
 parts/
 sdist/
