@@ -73,6 +73,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f db/migrations/005_documents_user_metadata.up.sql
           psql -v ON_ERROR_STOP=1 -f db/migrations/006_knowledge_models.up.sql
           psql -v ON_ERROR_STOP=1 -f db/migrations/007_model_writebacks.up.sql
+          psql -v ON_ERROR_STOP=1 -f db/migrations/008_document_analysis_metadata.up.sql
           psql -c "SELECT 1"
 
       - name: Ruff

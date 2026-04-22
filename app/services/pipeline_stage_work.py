@@ -10,6 +10,10 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.db.models import Document
 from app.repositories import pipeline_repository as pipe_repo
+from app.services.document_metadata_service import (
+    merge_analysis_metadata_section,
+    replace_pipeline_tags,
+)
 from app.services.heuristic_score import write_heuristic_canonical_score
 from app.services.queue_service import enqueue_score_document_sync
 from app.services.storage_service import ObjectStorage, get_object_storage
@@ -85,12 +89,54 @@ def enrich_stage(
     run_id: uuid.UUID,
     step_index: int,
     job_id: str,
+    settings: Settings | None = None,
 ) -> None:
+    settings = settings or get_settings()
     doc = session.get(Document, document_id)
     if doc is None:
         return
     body = doc.body_text or ""
     word_count = len(body.split())
+    char_count = len(body)
+    tier_tags: list[str] = []
+    if not body.strip():
+        tier_tags.append("empty_body")
+    elif word_count < 50:
+        tier_tags.append("short_doc")
+    elif word_count < 500:
+        tier_tags.append("medium_doc")
+    else:
+        tier_tags.append("long_doc")
+
+    merge_analysis_metadata_section(
+        session,
+        doc,
+        "enrich",
+        {
+            "schema_version": 1,
+            "mode": "text_stats",
+            "word_count": word_count,
+            "char_count": char_count,
+            "has_body_text": bool(body.strip()),
+        },
+        settings=settings,
+    )
+    suggested = list(dict.fromkeys(tier_tags))
+    merge_analysis_metadata_section(
+        session,
+        doc,
+        "tagging",
+        {"schema_version": 1, "suggested": suggested},
+        settings=settings,
+    )
+    replace_pipeline_tags(
+        session,
+        document_id,
+        tier_tags,
+        pipeline_run_id=run_id,
+        confidence=None,
+    )
+
     pipe_repo.append_event(
         session,
         run_id,
@@ -101,8 +147,9 @@ def enrich_stage(
             "job_id": job_id,
             "mode": "text_stats",
             "word_count": word_count,
-            "char_count": len(body),
+            "char_count": char_count,
             "has_body_text": bool(body.strip()),
+            "pipeline_tags": tier_tags,
         },
     )
 

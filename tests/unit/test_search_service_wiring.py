@@ -96,3 +96,32 @@ def test_search_fake_filter_by_tag_and_metadata_text(
     out2 = asyncio.run(search_documents(db, "unit-test-sub", "acme", limit=10))
     assert out2["total"] == 1
     assert out2["hits"][0]["document_id"] == str(a)
+
+
+@pytest.mark.unit
+def test_search_documents_semantic_weight_echo(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("USE_FAKE_OPENSEARCH", "true")
+    reset_settings_cache()
+    reset_fake_opensearch_index()
+
+    cid = uuid.uuid4()
+    index_document_sync(
+        document_id=uuid.uuid4(),
+        collection_id=cid,
+        title="Alpha topic",
+        body_text="discussion of revenue growth",
+        status="completed",
+    )
+
+    monkeypatch.setattr(
+        search_service_mod,
+        "resolve_accessible_collection_ids",
+        lambda *_a, **_kw: [cid],
+    )
+
+    db = MagicMock()
+    out = asyncio.run(
+        search_documents(db, "unit-test-sub", "revenue", limit=5, semantic_weight=0.4)
+    )
+    assert out["semantic_weight"] == 0.4
+    assert out["index_status"] == "fake"

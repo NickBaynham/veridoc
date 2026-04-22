@@ -300,6 +300,39 @@ def run_url_intake_submit(
     }
 
 
+def patch_document_metadata_for_user(
+    session: Session,
+    *,
+    auth_sub: str,
+    document_id: uuid.UUID,
+    user_metadata_patch: dict | None = None,
+    tags: list[str] | None = None,
+    settings: Settings | None = None,
+) -> Document | None:
+    """
+    Shallow-merge ``user_metadata`` keys and/or replace ``user`` source tags.
+
+    ``analysis_metadata`` remains worker-only.
+    """
+    settings = settings or get_settings()
+    allowed = set(resolve_accessible_collection_ids(session, auth_sub, settings))
+    doc = doc_repo.get_document(session, document_id)
+    if doc is None or doc.collection_id not in allowed:
+        return None
+    if user_metadata_patch is not None:
+        from app.services.document_metadata_service import merge_user_metadata_shallow
+
+        merge_user_metadata_shallow(doc, user_metadata_patch)
+    if tags is not None:
+        from app.services.document_metadata_service import replace_user_tags
+
+        replace_user_tags(session, document_id, tags)
+    session.add(doc)
+    session.commit()
+    session.refresh(doc)
+    return doc
+
+
 def list_documents_for_user(
     session: Session,
     *,

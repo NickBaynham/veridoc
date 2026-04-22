@@ -10,6 +10,10 @@ from pydantic import BaseModel, Field
 class SearchResponse(BaseModel):
     query: str
     limit: int
+    semantic_weight: float = Field(
+        default=0.0,
+        description="Blend with deterministic pseudo-embeddings (0=keyword only, 1=vector only).",
+    )
     hits: list[dict[str, Any]] = Field(default_factory=list)
     total: int = 0
     index_status: str

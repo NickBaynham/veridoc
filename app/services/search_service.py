@@ -63,6 +63,7 @@ async def search_documents(
     ingest_source: str | None = None,
     tags: list[str] | None = None,
     include_facets: bool = False,
+    semantic_weight: float = 0.0,
 ) -> dict[str, Any]:
     """
     Full-text on title, body, and flattened metadata text; bool filters on index fields.
@@ -95,10 +96,12 @@ async def search_documents(
         filters=filters,
         include_facets=include_facets,
         settings=settings,
+        semantic_weight=semantic_weight,
     )
     return {
         "query": query,
         "limit": limit,
+        "semantic_weight": semantic_weight,
         "hits": result["hits"],
         "total": result["total"],
         "index_status": result["index_status"],

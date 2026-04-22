@@ -12,6 +12,7 @@ EXPECTED_TABLES = frozenset(
         "collections",
         "documents",
         "document_sources",
+        "document_tags",
         "pipeline_runs",
         "pipeline_events",
         "document_scores",
@@ -32,6 +33,23 @@ def test_expected_tables_exist(db_conn):
         found = {row[0] for row in cur.fetchall()}
     missing = EXPECTED_TABLES - found
     assert not missing, f"missing tables: {sorted(missing)}; found: {sorted(found)}"
+
+
+@pytest.mark.integration
+def test_documents_analysis_metadata_column_exists(db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'documents'
+                AND column_name = 'analysis_metadata'
+            )
+            """
+        )
+        assert cur.fetchone()[0] is True
 
 
 @pytest.mark.integration

@@ -22,7 +22,7 @@ make ci-local             # like CI: Ruff + pytest with --cov=app/services (need
 
 ## Integration tests and Postgres
 
-Schema integration tests (`test_schema_*.py`) connect with **`psycopg`** using **`DATABASE_URL`**. They **do not** apply migrations; your pipeline (or you locally) must run the SQL in `db/migrations/` first (**001** through **007** when knowledge models and write-back are used).
+Schema integration tests (`test_schema_*.py`) connect with **`psycopg`** using **`DATABASE_URL`**. They **do not** apply migrations; your pipeline (or you locally) must run the SQL in `db/migrations/` first (**001** through **008** when knowledge models, write-back, and document tags are used).
 
 **Intake** integration tests (`test_document_intake.py`) use the **`intake_api_client`** fixture: real Postgres, **`USE_FAKE_QUEUE=true`**, **`USE_FAKE_EVENT_HUB=true`**, **`USE_FAKE_STORAGE=true`** (in-memory S3 stand-in), full multipart **`POST /api/v1/documents`** flow.
 

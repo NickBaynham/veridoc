@@ -254,6 +254,20 @@ class Settings(BaseSettings):
         validation_alias="BAYES_FUSION_PROMOTE_CANONICAL",
     )
 
+    # Cap JSON size for documents.analysis_metadata (worker-written sections).
+    analysis_metadata_max_json_bytes: int = Field(
+        default=96_384,
+        ge=1024,
+        le=2_000_000,
+        validation_alias="ANALYSIS_METADATA_MAX_JSON_BYTES",
+    )
+
+    # When false, OpenSearch documents omit dense vectors (older indexes without knn mapping).
+    opensearch_index_embeddings: bool = Field(
+        default=True,
+        validation_alias="OPENSEARCH_INDEX_EMBEDDINGS",
+    )
+
     @field_validator("score_async_backend", mode="before")
     @classmethod
     def normalize_score_async_backend(cls, v: object) -> str:

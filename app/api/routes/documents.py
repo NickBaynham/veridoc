@@ -31,23 +31,28 @@ from app.schemas.document import (
     DocumentCollectionTargetIn,
     DocumentDetailOut,
     DocumentListResponse,
+    DocumentMetadataPatchIn,
     DocumentSourceOut,
     DocumentSummaryOut,
+    DocumentTagOut,
     IntakeResponse,
     UrlIntakeRequest,
     UrlIntakeResponse,
 )
 from app.schemas.pipeline import DocumentPipelineOut
+from app.services.document_metadata_service import list_tags_for_document
 from app.services.document_service import (
     delete_document_for_user,
     get_document_for_user,
     list_documents_for_user,
+    patch_document_metadata_for_user,
     run_file_intake,
     run_url_intake_submit,
 )
 from app.services.document_transfer_service import (
     copy_document_for_user,
     move_document_for_user,
+    reindex_document_search,
 )
 from app.services.exceptions import (
     IntakeValidationError,
@@ -59,6 +64,50 @@ from app.services.storage_service import ObjectStorage
 from app.services.user_metadata import parse_metadata_json_string, validate_user_metadata
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+def _document_detail_out(
+    db: Session,
+    *,
+    doc,
+    sources: list,
+) -> DocumentDetailOut:
+    base = DocumentSummaryOut.model_validate(doc)
+    score_row = db.scalar(
+        select(DocumentScore)
+        .where(
+            DocumentScore.document_id == doc.id,
+            DocumentScore.is_canonical.is_(True),
+        )
+        .limit(1)
+    )
+    canon: CanonicalScoreOut | None = None
+    if score_row is not None:
+        canon = CanonicalScoreOut(
+            factuality_score=float(score_row.factuality_score)
+            if score_row.factuality_score is not None
+            else None,
+            ai_generation_probability=float(score_row.ai_generation_probability)
+            if score_row.ai_generation_probability is not None
+            else None,
+            fallacy_score=float(score_row.fallacy_score)
+            if score_row.fallacy_score is not None
+            else None,
+            confidence_score=float(score_row.confidence_score)
+            if score_row.confidence_score is not None
+            else None,
+            scorer_name=score_row.scorer_name,
+            scorer_version=score_row.scorer_version,
+        )
+    tag_rows = list_tags_for_document(db, doc.id)
+    return DocumentDetailOut(
+        **base.model_dump(),
+        sources=[DocumentSourceOut.model_validate(s) for s in sources],
+        body_text=doc.body_text,
+        canonical_score=canon,
+        analysis_metadata=dict(doc.analysis_metadata or {}),
+        tags=[DocumentTagOut.model_validate(t) for t in tag_rows],
+    )
 
 
 @router.get("", response_model=DocumentListResponse)
@@ -268,39 +317,37 @@ def get_document(
     if out is None:
         raise HTTPException(status_code=404, detail="Document not found")
     doc, sources = out
-    base = DocumentSummaryOut.model_validate(doc)
-    score_row = db.scalar(
-        select(DocumentScore)
-        .where(
-            DocumentScore.document_id == doc.id,
-            DocumentScore.is_canonical.is_(True),
+    return _document_detail_out(db, doc=doc, sources=sources)
+
+
+@router.patch("/{document_id}/metadata", response_model=DocumentDetailOut)
+def patch_document_metadata(
+    document_id: uuid.UUID,
+    body: DocumentMetadataPatchIn,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user),
+) -> DocumentDetailOut:
+    """Merge user_metadata keys and/or replace user-sourced tags; reindexes OpenSearch."""
+    if body.user_metadata is None and body.tags is None:
+        raise HTTPException(status_code=400, detail="Provide user_metadata and/or tags")
+    try:
+        doc = patch_document_metadata_for_user(
+            db,
+            auth_sub=user_id,
+            document_id=document_id,
+            user_metadata_patch=body.user_metadata,
+            tags=body.tags,
         )
-        .limit(1)
-    )
-    canon: CanonicalScoreOut | None = None
-    if score_row is not None:
-        canon = CanonicalScoreOut(
-            factuality_score=float(score_row.factuality_score)
-            if score_row.factuality_score is not None
-            else None,
-            ai_generation_probability=float(score_row.ai_generation_probability)
-            if score_row.ai_generation_probability is not None
-            else None,
-            fallacy_score=float(score_row.fallacy_score)
-            if score_row.fallacy_score is not None
-            else None,
-            confidence_score=float(score_row.confidence_score)
-            if score_row.confidence_score is not None
-            else None,
-            scorer_name=score_row.scorer_name,
-            scorer_version=score_row.scorer_version,
-        )
-    return DocumentDetailOut(
-        **base.model_dump(),
-        sources=[DocumentSourceOut.model_validate(s) for s in sources],
-        body_text=doc.body_text,
-        canonical_score=canon,
-    )
+    except IntakeValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    reindex_document_search(db, document_id)
+    out = get_document_for_user(db, document_id=document_id, auth_sub=user_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    doc2, sources = out
+    return _document_detail_out(db, doc=doc2, sources=sources)
 
 
 @router.delete("/{document_id}", status_code=204)

@@ -94,6 +94,29 @@ class DocumentSummaryOut(BaseModel):
     updated_at: datetime
 
 
+class DocumentTagOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    tag: str
+    source: str
+    confidence: float | None = None
+    created_at: datetime
+
+
+class DocumentMetadataPatchIn(BaseModel):
+    """Shallow-merge user_metadata and/or replace user tags."""
+
+    user_metadata: dict[str, Any] | None = Field(
+        default=None,
+        description="Top-level keys merged into user_metadata; null values remove a key.",
+    )
+    tags: list[str] | None = Field(
+        default=None,
+        description="When set, replaces tags with source=user on this document.",
+    )
+
+
 class CanonicalScoreOut(BaseModel):
     factuality_score: float | None = None
     ai_generation_probability: float | None = None
@@ -112,6 +135,14 @@ class DocumentDetailOut(DocumentSummaryOut):
     canonical_score: CanonicalScoreOut | None = Field(
         default=None,
         description="Latest canonical row from document_scores when present.",
+    )
+    analysis_metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Pipeline-written sections (extract, enrich, tagging).",
+    )
+    tags: list[DocumentTagOut] = Field(
+        default_factory=list,
+        description="Normalized tags (user, pipeline, …).",
     )
 
 

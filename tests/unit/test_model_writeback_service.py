@@ -6,7 +6,6 @@ import uuid
 from unittest.mock import MagicMock
 
 import pytest
-
 from app.services import model_writeback_service as svc
 
 

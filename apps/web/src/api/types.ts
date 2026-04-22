@@ -35,10 +35,20 @@ export interface CanonicalScore {
   scorer_version: string | null;
 }
 
+export interface DocumentTag {
+  id: string;
+  tag: string;
+  source: string;
+  confidence: number | null;
+  created_at: string;
+}
+
 export interface DocumentDetail extends DocumentSummary {
   sources: DocumentSource[];
   body_text: string | null;
   canonical_score?: CanonicalScore | null;
+  analysis_metadata?: Record<string, unknown>;
+  tags?: DocumentTag[];
 }
 
 export interface PipelineEvent {
@@ -165,6 +175,8 @@ export interface SearchHit {
 export interface SearchResponse {
   query: string;
   limit: number;
+  /** 0–1 blend with deterministic pseudo-embeddings when `q` is non-empty. */
+  semantic_weight?: number;
   hits: SearchHit[];
   total: number;
   index_status: string;

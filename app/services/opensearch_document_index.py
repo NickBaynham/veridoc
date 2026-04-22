@@ -18,8 +18,11 @@ from app.services.search_filters import (
     fake_doc_matches_filters,
     opensearch_filter_clauses,
 )
+from app.services.text_embedding_stub import cosine_similarity, deterministic_text_embedding
 
 log = logging.getLogger("verifiedsignal.opensearch")
+
+_EMBED_DIM = 64
 
 _fake_lock = threading.Lock()
 _fake_docs: dict[str, dict[str, Any]] = {}
@@ -50,6 +53,15 @@ def _base_mapping_properties() -> dict[str, Any]:
         "tags": {"type": "keyword"},
         "metadata_label": {"type": "keyword"},
         "metadata_text": {"type": "text"},
+        "embedding": {
+            "type": "knn_vector",
+            "dimension": _EMBED_DIM,
+            "method": {
+                "name": "hnsw",
+                "space_type": "innerproduct",
+                "engine": "lucene",
+            },
+        },
     }
 
 
@@ -61,10 +73,13 @@ def ensure_index_and_mapping(settings: Settings | None = None) -> None:
 
     base = settings.opensearch_url.rstrip("/")
     name = settings.opensearch_index_name.strip() or "verifiedsignal_documents"
-    mapping = {"mappings": {"properties": _base_mapping_properties()}}
+    create_body = {
+        "settings": {"index": {"knn": True}},
+        "mappings": {"properties": _base_mapping_properties()},
+    }
     url = f"{base}/{name}"
     with httpx.Client(timeout=30.0) as client:
-        r = client.put(url, json=mapping)
+        r = client.put(url, json=create_body)
         if r.status_code in (200, 201):
             return
         try:
@@ -100,10 +115,15 @@ def index_document_sync(
     tags: list[str] | None = None,
     metadata_label: str | None = None,
     metadata_text: str = "",
+    embedding: list[float] | None = None,
 ) -> None:
     settings = settings or get_settings()
     doc_id = str(document_id)
     tag_list = tags or []
+    embed = embedding
+    if embed is None:
+        embed_text = " ".join(x for x in (title or "", (body_text or "")[:12000]) if x)
+        embed = deterministic_text_embedding(embed_text, dim=_EMBED_DIM)
     payload: dict[str, Any] = {
         "document_id": doc_id,
         "collection_id": str(collection_id),
@@ -117,6 +137,8 @@ def index_document_sync(
         "metadata_label": metadata_label or "",
         "metadata_text": metadata_text or "",
     }
+    if settings.use_fake_opensearch or settings.opensearch_index_embeddings:
+        payload["embedding"] = embed
     if settings.use_fake_opensearch:
         with _fake_lock:
             _fake_docs[doc_id] = payload
@@ -126,7 +148,20 @@ def index_document_sync(
     url = f"{_index_url(settings)}/_doc/{doc_id}?refresh=wait_for"
     with httpx.Client(timeout=30.0) as client:
         r = client.put(url, json=payload)
-        if r.status_code not in (200, 201):
+        if r.status_code in (200, 201):
+            return
+        if settings.opensearch_index_embeddings and "embedding" in payload:
+            slim = {k: v for k, v in payload.items() if k != "embedding"}
+            r2 = client.put(url, json=slim)
+            if r2.status_code in (200, 201):
+                return
+            log.warning(
+                "opensearch_index_failed document_id=%s status=%s text=%s",
+                doc_id,
+                r2.status_code,
+                r2.text[:500],
+            )
+        else:
             log.warning(
                 "opensearch_index_failed document_id=%s status=%s text=%s",
                 doc_id,
@@ -170,6 +205,33 @@ def _bool_query_text(q: str) -> dict[str, Any]:
     return {"match_all": {}}
 
 
+def _rerank_opensearch_hits(
+    raw_hits: list[dict[str, Any]],
+    query: str,
+    limit: int,
+    semantic_weight: float,
+) -> list[dict[str, Any]]:
+    w = max(0.0, min(1.0, semantic_weight))
+    q = (query or "").strip()
+    if w <= 0 or not q:
+        return raw_hits[:limit]
+    q_emb = deterministic_text_embedding(q, dim=_EMBED_DIM)
+    max_ts = max((float(h.get("_score") or 0.0) for h in raw_hits), default=1.0) or 1.0
+    scored: list[tuple[float, dict[str, Any]]] = []
+    for h in raw_hits:
+        ts = float(h.get("_score") or 0.0) / max_ts
+        src = h.get("_source") or {}
+        emb = src.get("embedding")
+        if isinstance(emb, list) and len(emb) == _EMBED_DIM:
+            cos = max(0.0, cosine_similarity(q_emb, [float(x) for x in emb]))
+        else:
+            cos = 0.0
+        combined = (1.0 - w) * ts + w * cos
+        scored.append((combined, h))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [h for _, h in scored[:limit]]
+
+
 def search_documents_sync(
     query: str,
     *,
@@ -177,6 +239,7 @@ def search_documents_sync(
     filters: SearchFilters,
     include_facets: bool = False,
     settings: Settings | None = None,
+    semantic_weight: float = 0.0,
 ) -> dict[str, Any]:
     """
     Full-text + metadata filters; optional facet aggregations on source, status, type, tags.
@@ -185,7 +248,7 @@ def search_documents_sync(
     lim = max(1, min(limit, 100))
 
     if settings.use_fake_opensearch:
-        return _search_fake(query, lim, filters, include_facets)
+        return _search_fake(query, lim, filters, include_facets, semantic_weight)
 
     ensure_index_and_mapping(settings)
     fclauses = opensearch_filter_clauses(filters)
@@ -193,8 +256,12 @@ def search_documents_sync(
     bool_q: dict[str, Any] = {"must": [must]}
     if fclauses:
         bool_q["filter"] = fclauses
+    fetch_lim = lim
+    w = max(0.0, min(1.0, semantic_weight))
+    if w > 0 and (query or "").strip():
+        fetch_lim = min(100, max(lim * 4, lim))
     body: dict[str, Any] = {
-        "size": lim,
+        "size": fetch_lim,
         "track_total_hits": True,
         "query": {"bool": bool_q},
     }
@@ -218,8 +285,10 @@ def search_documents_sync(
                 "facets": None,
             }
         data = r.json()
+    raw_hits = list(data.get("hits", {}).get("hits", []))
+    ranked_hits = _rerank_opensearch_hits(raw_hits, query, lim, semantic_weight)
     hits_out: list[dict[str, Any]] = []
-    for h in data.get("hits", {}).get("hits", [])[:lim]:
+    for h in ranked_hits:
         src = h.get("_source") or {}
         hits_out.append(
             {
@@ -289,6 +358,7 @@ def search_keyword_sync(
     *,
     limit: int,
     settings: Settings | None = None,
+    semantic_weight: float = 0.0,
 ) -> dict[str, Any]:
     """Backward-compatible: text search without metadata filters or facets."""
     out = search_documents_sync(
@@ -297,6 +367,7 @@ def search_keyword_sync(
         filters=SearchFilters(),
         include_facets=False,
         settings=settings,
+        semantic_weight=semantic_weight,
     )
     out.pop("facets", None)
     return out
@@ -307,8 +378,10 @@ def _search_fake(
     limit: int,
     filters: SearchFilters,
     include_facets: bool,
+    semantic_weight: float = 0.0,
 ) -> dict[str, Any]:
-    q = (query or "").strip().lower()
+    q_raw = (query or "").strip()
+    q = q_raw.lower()
     with _fake_lock:
         docs = list(_fake_docs.values())
     filtered = [d for d in docs if fake_doc_matches_filters(d, filters)]
@@ -322,7 +395,30 @@ def _search_fake(
             meta = (d.get("metadata_text") or "").lower()
             if q in title or q in body or q in meta:
                 text_matched.append(d)
-    ranked = text_matched[:limit]
+    w = max(0.0, min(1.0, semantic_weight))
+    ranked = text_matched
+    if w > 0 and q_raw:
+        q_emb = deterministic_text_embedding(q_raw, dim=_EMBED_DIM)
+        scored: list[tuple[float, dict[str, Any]]] = []
+        for d in ranked:
+            title = (d.get("title") or "").lower()
+            body = (d.get("body_text") or "").lower()
+            meta = (d.get("metadata_text") or "").lower()
+            kw = (
+                1.0
+                if (not q or q in title or q in body or q in meta)
+                else 0.35
+            )
+            emb = d.get("embedding")
+            if isinstance(emb, list) and len(emb) == _EMBED_DIM:
+                cos = max(0.0, cosine_similarity(q_emb, [float(x) for x in emb]))
+            else:
+                cos = 0.0
+            combined = (1.0 - w) * kw + w * cos
+            scored.append((combined, d))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        ranked = [d for _, d in scored]
+    ranked = ranked[:limit]
     hits = [
         {
             "document_id": d.get("document_id"),

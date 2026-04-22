@@ -40,6 +40,15 @@ async def search(
         default=False,
         description="Include facet bucket counts (ingest_source, status, content_type, tags).",
     ),
+    semantic_weight: float = Query(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Re-rank keyword hits using deterministic pseudo-embeddings (no external model). "
+            "Ignored when q is empty."
+        ),
+    ),
 ) -> SearchResponse:
     raw = await search_documents(
         db,
@@ -52,5 +61,6 @@ async def search(
         ingest_source=ingest_source,
         tags=tags,
         include_facets=include_facets,
+        semantic_weight=semantic_weight,
     )
     return SearchResponse(**raw)

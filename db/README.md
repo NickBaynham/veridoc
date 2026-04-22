@@ -20,8 +20,10 @@ This directory holds **canonical** schema definitions for VerifiedSignal. The ap
 | `migrations/006_knowledge_models.down.sql` | Rollback (drops knowledge-model tables). |
 | `migrations/007_model_writebacks.up.sql` | **Model write-back**: `model_writeback_artifacts`, `model_writeback_events` (findings, risks, tests, execution, evidence, contradictions; provenance + verification). |
 | `migrations/007_model_writebacks.down.sql` | Rollback (drops write-back tables). |
+| `migrations/008_document_analysis_metadata.up.sql` | **`documents.analysis_metadata`** JSONB + **`document_tags`** (normalized tags with source + optional confidence). |
+| `migrations/008_document_analysis_metadata.down.sql` | Rollback (drops tags table + column). |
 
-**Planned (design only):** further metadata layers — **[`docs/document-metadata-design.md`](../docs/document-metadata-design.md)** (`analysis_metadata`, `document_tags`, etc.). **`user_metadata`** is implemented in **005** for intake + search.
+Design reference for metadata layers: **[`docs/document-metadata-design.md`](../docs/document-metadata-design.md)**. **`user_metadata`** is in **005**; **008** adds worker **`analysis_metadata`** and **`document_tags`**.
 
 ### Applying manually
 
